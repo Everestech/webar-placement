@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos</title>
+    <title>WebAR: Colocación de Objetos (Debug)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -93,6 +93,7 @@
                 // Escucha el evento cuando se inicia el modo AR y se puede hacer hit-test
                 this.sceneEl.addEventListener('enter-vr', (evt) => {
                     if (this.sceneEl.is('ar-mode')) {
+                        console.log('DEBUG: ENTER-VR OK. AR mode activo.');
                         this.hitTestReady = true;
                         this.statusEl.textContent = '¡Cámara activada! Mueva lentamente el móvil para escanear el suelo y detectar superficies.';
                         this.sceneEl.addEventListener('click', this.placeObject.bind(this));
@@ -113,7 +114,7 @@
                         this.statusEl.textContent = 'Superficie LISTA. Toque la pantalla para colocar.';
                         this.hitTestState = true;
                     } else {
-                        // Si no hay intersección
+                        // Si no hay intersección, pero el hit-test está funcionando (se está disparando el evento)
                         this.template.setAttribute('visible', 'false');
                         this.statusEl.textContent = 'Mueva lentamente el móvil para escanear y encontrar superficies...';
                         this.hitTestState = false;
@@ -122,18 +123,23 @@
 
                 // Manejo de errores
                 this.sceneEl.addEventListener('ar-hit-test-unavailable', function () {
+                    console.error('DEBUG: ERROR DE AR. El hit-test no está disponible.');
                     this.statusEl.textContent = 'ERROR: Detección de superficie no disponible. Asegúrese de tener ARCore/ARKit en su móvil.';
                     this.hitTestReady = false;
                 }.bind(this));
 
                 // Asegurar que el hit-test esté activo al inicio de la sesión AR
                 this.sceneEl.addEventListener('ar-session-start', () => {
+                    console.log('DEBUG: Sesión AR iniciada. Activando Hit-Test...');
                     this.sceneEl.setAttribute('ar-hit-test', 'doHitTest: true');
                 });
             },
             
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
+                console.log('DEBUG: Evento CLICK disparado.');
+                console.log(`DEBUG: hitTestReady=${this.hitTestReady}, hitTestState=${this.hitTestState}`);
+
                 // Solo colocamos si hay un plano detectado (cursor visible)
                 if (this.hitTestState && this.hitTestReady) {
                     const newObject = document.createElement('a-entity');
@@ -187,8 +193,11 @@
         id="ar-scene"
         embedded 
         webxr-placement-logic 
-        renderer="logarithmicDepthBuffer: true; antialias: true;"
+        renderer="logarithmicDepthBuffer: true; antialias: true; outputEncoding: sRGB"
         vr-mode-ui="enabled: false"
+        
+        <!-- FIX POTENCIAL: Añadimos un tamaño explícito a la escena A-Frame para evitar el error de redimensionamiento -->
+        width="100%" height="100%"
         
         <!-- Configuración de WebXR: Requerir la prueba de impacto (hit-test) para AR -->
         webxr="requiredFeatures: [hit-test, local-floor]; 
