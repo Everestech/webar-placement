@@ -26,19 +26,32 @@
             text-align: center;
             font-family: 'Inter', sans-serif;
         }
-        
-        /* Oculta el cursor 3D cuando no hay superficie */
-        .ar-cursor {
-            cursor: pointer;
+
+        /* Estilo para el overlay de inicio */
+        #ar-overlay {
+            z-index: 1010;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: white;
+            backdrop-filter: blur(5px);
         }
 
-        /* Oculta el componente de cámara por defecto de A-Frame, ya que AR.js se encarga */
+        /* Asegura que la escena ocupe toda la pantalla */
         a-scene {
             height: 100vh;
             width: 100vw;
         }
 
-        /* Esfera de cursor AR para indicar la posición de colocación */
+        /* Animación de pulso para el cursor */
         .cursor-sphere {
             opacity: 0.6;
             animation: pulse 1.5s infinite alternate;
@@ -46,10 +59,10 @@
 
         @keyframes pulse {
             from {
-                scale: 1 1 1;
+                transform: scale(1);
             }
             to {
-                scale: 1.1 1.1 1.1;
+                transform: scale(1.1);
             }
         }
     </style>
@@ -58,7 +71,7 @@
 
     <!-- 
         ============================================================
-        Definición del Componente JavaScript para la Lógica AR
+        Componente JavaScript para la Lógica AR
         ============================================================
     -->
     <script>
@@ -66,7 +79,6 @@
         AFRAME.registerComponent('ar-placement-logic', {
             init: function () {
                 const sceneEl = this.el;
-                const camera = sceneEl.camera;
                 const statusEl = document.getElementById('status-message');
                 const cursorEl = document.getElementById('ar-cursor');
                 
@@ -76,16 +88,16 @@
                 cursorEl.appendChild(template);
                 template.setAttribute('visible', 'false'); // Ocultar al inicio
 
-                let objectCount = 0;
-                
-                // Inicializa el mensaje de estado
-                statusEl.textContent = 'Inicializando AR... Por favor, asegúrese de estar en HTTPS.';
-                
-                // Detecta cuando la escena AR está lista y el tracking ha comenzado
+                this.objectCount = 0; // Inicializar contador en el componente
+                this.sceneEl = sceneEl;
+                this.statusEl = statusEl;
+                this.template = template;
+
+                // Evento que se dispara cuando AR.js ha iniciado la cámara
                 sceneEl.addEventListener('ar-session-started', (evt) => {
                     console.log('Sesión AR iniciada con éxito.');
-                    statusEl.textContent = 'Mueva el dispositivo para escanear y encontrar superficies.';
-                    cursorEl.setAttribute('raycaster', 'objects: .ar-surface-plane'); // Aseguramos que el cursor solo apunte a superficies
+                    this.statusEl.textContent = 'Mueva el dispositivo para escanear y encontrar superficies.';
+                    cursorEl.setAttribute('raycaster', 'objects: .ar-surface-plane');
                     
                     // Añadir listener para la colocación de objetos (al tocar la pantalla)
                     sceneEl.addEventListener('click', this.placeObject.bind(this));
@@ -93,59 +105,74 @@
 
                 sceneEl.addEventListener('ar-session-failed', (evt) => {
                     console.error('Error al iniciar la sesión AR:', evt.detail);
-                    statusEl.textContent = 'ERROR al iniciar AR. ¿Está en HTTPS y usando un dispositivo compatible?';
-                });
-                
-                sceneEl.addEventListener('ar-session-ended', () => {
-                    statusEl.textContent = 'Sesión AR finalizada. Recargue para empezar de nuevo.';
+                    this.statusEl.textContent = 'ERROR al iniciar AR. Intente recargar y asegurarse de tener buena iluminación.';
                 });
             },
             
             // Función que se ejecuta en cada frame para mover el cursor
             tick: function() {
+                // Usamos las variables guardadas en 'this' para acceder a los elementos
                 const cursorEl = document.getElementById('ar-cursor');
-                const statusEl = document.getElementById('status-message');
-                const template = document.getElementById('template-clone');
-                
-                // La lógica de puntería (hit-testing) se maneja automáticamente por el cursor de A-Frame
-                // Cuando el rayo del cursor golpea una superficie, establece su posición.
                 
                 if (cursorEl.components.raycaster && cursorEl.components.raycaster.intersections.length > 0) {
                     const intersection = cursorEl.components.raycaster.intersections[0];
                     
                     // Mueve el cursor 3D a la posición del impacto
-                    template.setAttribute('position', intersection.point);
-                    template.setAttribute('visible', 'true');
-                    statusEl.textContent = 'Superficie detectada. Toque la pantalla para colocar.';
+                    this.template.setAttribute('position', intersection.point);
+                    this.template.setAttribute('visible', 'true');
+                    this.statusEl.textContent = 'Superficie detectada. Toque la pantalla para colocar.';
                 } else {
                     // Si no hay superficie
-                    template.setAttribute('visible', 'false');
-                    statusEl.textContent = 'Mueva el dispositivo para escanear y encontrar superficies...';
+                    this.template.setAttribute('visible', 'false');
+                    this.statusEl.textContent = 'Mueva el dispositivo para escanear y encontrar superficies...';
                 }
             },
             
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
-                const template = document.getElementById('template-clone');
-                
                 // Solo colocamos si el cursor es visible (i.e., hay una superficie debajo)
-                if (template.getAttribute('visible') === 'true') {
+                if (this.template.getAttribute('visible') === 'true') {
                     const newObject = document.createElement('a-entity');
                     // Usamos la posición del cursor
-                    const cursorPosition = template.getAttribute('position');
+                    const cursorPosition = this.template.getAttribute('position');
                     
-                    // Crear una caja visible para simular el objeto de Godot
+                    // Configuración del objeto (Caja giratoria)
                     newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
                     newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
                     newObject.setAttribute('position', `${cursorPosition.x} ${cursorPosition.y + 0.1} ${cursorPosition.z}`);
                     newObject.setAttribute('shadow', '');
                     newObject.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
                     
-                    this.el.appendChild(newObject);
+                    this.sceneEl.appendChild(newObject);
                     this.objectCount++;
-                    document.getElementById('status-message').textContent = `Objeto ${this.objectCount} colocado. Siga escaneando.`;
+                    this.statusEl.textContent = `Objeto ${this.objectCount} colocado. Siga escaneando.`;
                 }
             }
+        });
+
+        // Lógica para iniciar la sesión AR al hacer clic en el botón
+        function startAR() {
+            const scene = document.getElementById('ar-scene');
+            const overlay = document.getElementById('ar-overlay');
+            const statusEl = document.getElementById('status-message');
+            
+            // 1. Inicia la escena de A-Frame (activa la cámara)
+            scene.play();
+            
+            // 2. Oculta el overlay
+            overlay.style.display = 'none';
+
+            // 3. Muestra mensaje inicial
+            statusEl.textContent = 'Activando cámara...';
+        }
+
+        // Se asegura de que la escena esté pausada hasta que el usuario haga clic
+        document.addEventListener('DOMContentLoaded', () => {
+            const scene = document.getElementById('ar-scene');
+            scene.pause();
+            
+            // Asocia la función startAR al botón
+            document.getElementById('start-ar-button').addEventListener('click', startAR);
         });
     </script>
 
@@ -161,8 +188,7 @@
         renderer="logarithmicDepthBuffer: true;"
         vr-mode-ui="enabled: false">
         
-        <!-- El componente AR.js, configurado para AR nativo (WebXR) -->
-        <!-- La propiedad vr-mode-ui="enabled: false" evita el botón de VR molesto -->
+        <!-- Componente AR.js: Configurado para WebXR -->
         <a-entity arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;">
         </a-entity>
 
@@ -170,20 +196,17 @@
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
         <a-entity light="type: directional; color: #FFF; intensity: 0.8" position="-1 1 1"></a-entity>
         
-        <!-- Cámara: Se usará la cámara AR del dispositivo -->
+        <!-- Cámara: Necesaria en la escena, aunque AR.js la configura -->
         <a-camera user-height="0"></a-camera>
 
-        <!-- 
-            EL CURSOR DE PUNTERÍA AR
-            Usamos un a-entity que contendrá un raycaster para encontrar superficies
-        -->
+        <!-- EL CURSOR DE PUNTERÍA AR -->
         <a-entity 
             id="ar-cursor" 
             cursor="rayOrigin: mouse" 
             raycaster="objects: .ar-surface-plane; showLine: false" 
             position="0 0 -0.5">
             
-            <!-- Template del objeto que se usará como cursor (un anillo o esfera pequeña) -->
+            <!-- Template del objeto que se usará como cursor (un anillo) -->
             <a-entity 
                 id="object-template"
                 geometry="primitive: torus; radius: 0.05; radiusTubular: 0.005; segmentsRadial: 16; segmentsTubular: 12"
@@ -192,15 +215,33 @@
                 class="cursor-sphere">
             </a-entity>
         </a-entity>
-        
-        <!-- Elemento para representar los planos detectados. Necesario para que el raycaster funcione. -->
-        <!-- Nota: En AR.js/A-Frame, el plano se añade implícitamente por el motor de AR. -->
 
     </a-scene>
 
+    <!-- 
+        ============================================================
+        INTERFAZ DE USUARIO (UI)
+        ============================================================
+    -->
+
+    <!-- Overlay de inicio: El botón de clic explícito -->
+    <div id="ar-overlay">
+        <div class="p-6 max-w-sm bg-white rounded-xl shadow-2xl space-y-4 transform scale-100 md:scale-110 transition duration-300">
+            <h1 class="text-2xl font-bold text-gray-900">Bienvenido a WebAR</h1>
+            <p class="text-gray-600">Esta aplicación necesita acceder a su cámara para la Realidad Aumentada (AR).</p>
+            <p class="text-sm text-red-500 font-semibold">Debe estar en un entorno con buena iluminación.</p>
+            <button 
+                id="start-ar-button" 
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg transform hover:scale-105">
+                INICIAR EXPERIENCIA AR
+            </button>
+            <p class="text-xs text-gray-500 mt-4">Asegúrese de aceptar el permiso de la cámara del navegador.</p>
+        </div>
+    </div>
+
     <!-- Mensaje de estado en la parte inferior de la pantalla -->
     <div id="status-message" class="text-sm rounded-t-lg shadow-2xl">
-        Cargando experiencia...
+        Toque "INICIAR EXPERIENCIA AR"
     </div>
 
 </body>
