@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos (Debug)</title>
+    <title>WebAR: Colocación de Objetos (Táctil Forzada)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -81,31 +81,32 @@
                 this.statusEl = document.getElementById('status-message');
                 this.cursorEl = document.getElementById('ar-cursor');
                 this.objectCount = 0;
-                this.hitTestState = false; 
-                this.hitTestReady = false; // Indica si WebXR está listo para hacer hit-test
+                this.hitTestState = false; // ¿Hay una superficie detectada AHORA?
+                this.hitTestReady = false; // ¿Está WebXR listo para Hit-Test?
 
-                // Clonar el objeto cursor (template)
+                // Clonar el objeto cursor (template) y usarlo como marcador
                 this.template = document.getElementById('object-template').cloneNode(true);
                 this.template.id = 'template-clone';
                 this.cursorEl.appendChild(this.template);
                 this.template.setAttribute('visible', 'false');
 
-                // Escucha el evento cuando se inicia el modo AR y se puede hacer hit-test
+                // 1. Escuchar cuando el modo AR se activa
                 this.sceneEl.addEventListener('enter-vr', (evt) => {
                     if (this.sceneEl.is('ar-mode')) {
-                        console.log('DEBUG: ENTER-VR OK. AR mode activo.');
+                        console.log('DEBUG: ENTER-VR OK. AR mode activo. Inicializando listeners táctiles.');
                         this.hitTestReady = true;
                         this.statusEl.textContent = '¡Cámara activada! Mueva lentamente el móvil para escanear el suelo y detectar superficies.';
-                        this.sceneEl.addEventListener('click', this.placeObject.bind(this));
+                        
+                        // Nuevo Listener de Touchend (Toque finalizado) en la escena
+                        this.sceneEl.canvas.addEventListener('touchend', this.placeObject.bind(this));
                     }
                 });
 
-                // Este evento se dispara continuamente cuando WebXR encuentra una intersección
+                // 2. Evento continuo de WebXR: ¿Dónde está la superficie?
                 this.sceneEl.addEventListener('ar-hit-test-result', (evt) => {
                     if (!this.hitTestReady) return;
 
                     if (evt.detail.intersection) {
-                        // Transformar el hit-test (intersección) en una posición
                         const position = evt.detail.intersection.point;
                         
                         // Mueve el cursor a la posición detectada
@@ -114,14 +115,14 @@
                         this.statusEl.textContent = 'Superficie LISTA. Toque la pantalla para colocar.';
                         this.hitTestState = true;
                     } else {
-                        // Si no hay intersección, pero el hit-test está funcionando (se está disparando el evento)
+                        // No hay intersección
                         this.template.setAttribute('visible', 'false');
                         this.statusEl.textContent = 'Mueva lentamente el móvil para escanear y encontrar superficies...';
                         this.hitTestState = false;
                     }
                 });
 
-                // Manejo de errores
+                // 3. Manejo de errores
                 this.sceneEl.addEventListener('ar-hit-test-unavailable', function () {
                     console.error('DEBUG: ERROR DE AR. El hit-test no está disponible.');
                     this.statusEl.textContent = 'ERROR: Detección de superficie no disponible. Asegúrese de tener ARCore/ARKit en su móvil.';
@@ -137,7 +138,19 @@
             
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
-                console.log('DEBUG: Evento CLICK disparado.');
+                // Prevenir el comportamiento por defecto (scrolling, zoom)
+                evt.preventDefault(); 
+                
+                // Ignorar el toque si el overlay inicial aún está visible
+                if (document.getElementById('ar-overlay').style.display !== 'none') {
+                    return;
+                }
+                
+                // Si el evento vino del botón de A-Frame (la UI), lo ignoramos para evitar doble ejecución
+                if (evt.target.id === 'vr-button') return;
+
+
+                console.log('DEBUG: Evento TOUCHEND (Toque Táctil) disparado.');
                 console.log(`DEBUG: hitTestReady=${this.hitTestReady}, hitTestState=${this.hitTestState}`);
 
                 // Solo colocamos si hay un plano detectado (cursor visible)
@@ -170,11 +183,13 @@
             const statusEl = document.getElementById('status-message');
             
             overlay.style.opacity = '0';
-            setTimeout(() => overlay.style.display = 'none', 300); // Ocultar después de la transición
-            statusEl.textContent = 'Activando cámara y detección de superficies...';
-            
-            // 2. Intenta entrar al modo AR. Esto activa la cámara y el motor WebXR.
-            scene.enterAR();
+            // Ocultar después de la transición
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                statusEl.textContent = 'Activando cámara y detección de superficies...';
+                // Intenta entrar al modo AR. Esto activa la cámara y el motor WebXR.
+                scene.enterAR();
+            }, 300); 
         }
 
         // Configuración inicial de A-Frame
@@ -195,9 +210,6 @@
         webxr-placement-logic 
         renderer="logarithmicDepthBuffer: true; antialias: true; outputEncoding: sRGB"
         vr-mode-ui="enabled: false"
-        
-        <!-- FIX POTENCIAL: Añadimos un tamaño explícito a la escena A-Frame para evitar el error de redimensionamiento -->
-        width="100%" height="100%"
         
         <!-- Configuración de WebXR: Requerir la prueba de impacto (hit-test) para AR -->
         webxr="requiredFeatures: [hit-test, local-floor]; 
