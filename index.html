@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos (Táctil Forzada)</title>
+    <title>WebAR: Colocación de Objetos (Forzando MouseUp)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -81,8 +81,8 @@
                 this.statusEl = document.getElementById('status-message');
                 this.cursorEl = document.getElementById('ar-cursor');
                 this.objectCount = 0;
-                this.hitTestState = false; // ¿Hay una superficie detectada AHORA?
-                this.hitTestReady = false; // ¿Está WebXR listo para Hit-Test?
+                this.hitTestState = false; 
+                this.hitTestReady = false; 
 
                 // Clonar el objeto cursor (template) y usarlo como marcador
                 this.template = document.getElementById('object-template').cloneNode(true);
@@ -93,12 +93,21 @@
                 // 1. Escuchar cuando el modo AR se activa
                 this.sceneEl.addEventListener('enter-vr', (evt) => {
                     if (this.sceneEl.is('ar-mode')) {
-                        console.log('DEBUG: ENTER-VR OK. AR mode activo. Inicializando listeners táctiles.');
+                        console.log('DEBUG: ENTER-VR OK. AR mode activo. Inicializando listeners con MouseUp.');
                         this.hitTestReady = true;
                         this.statusEl.textContent = '¡Cámara activada! Mueva lentamente el móvil para escanear el suelo y detectar superficies.';
                         
-                        // Nuevo Listener de Touchend (Toque finalizado) en la escena
-                        this.sceneEl.canvas.addEventListener('touchend', this.placeObject.bind(this));
+                        // **** CAMBIO CRÍTICO: Usar mouseup en el canvas de A-Frame ****
+                        // Mouseup es a menudo el evento más fiable para un "tap" en el canvas de Three.js/A-Frame.
+                        // También añadimos 'click' como fallback.
+                        const canvas = this.sceneEl.canvas;
+                        if (canvas) {
+                            canvas.addEventListener('mouseup', this.placeObject.bind(this));
+                            canvas.addEventListener('click', this.placeObject.bind(this));
+                            console.log('DEBUG: Listeners "mouseup" y "click" adjuntados al Canvas.');
+                        } else {
+                            console.error('DEBUG: ERROR - Canvas no encontrado.');
+                        }
                     }
                 });
 
@@ -122,14 +131,13 @@
                     }
                 });
 
-                // 3. Manejo de errores
+                // 3. Manejo de errores y sesión AR
                 this.sceneEl.addEventListener('ar-hit-test-unavailable', function () {
                     console.error('DEBUG: ERROR DE AR. El hit-test no está disponible.');
                     this.statusEl.textContent = 'ERROR: Detección de superficie no disponible. Asegúrese de tener ARCore/ARKit en su móvil.';
                     this.hitTestReady = false;
                 }.bind(this));
 
-                // Asegurar que el hit-test esté activo al inicio de la sesión AR
                 this.sceneEl.addEventListener('ar-session-start', () => {
                     console.log('DEBUG: Sesión AR iniciada. Activando Hit-Test...');
                     this.sceneEl.setAttribute('ar-hit-test', 'doHitTest: true');
@@ -138,30 +146,27 @@
             
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
-                // Prevenir el comportamiento por defecto (scrolling, zoom)
+                // ***** CRÍTICO: Pausa para depuración *****
+                // Esto DEBE aparecer en el panel de Fuentes/Sources de DevTools y detener la ejecución.
+                // Si la ejecución se detiene aquí, el problema es la lógica interna (hitTestState/Ready), no el evento.
+                console.log('DEBUG: --- ¡EVENTO TÁCTIL CAPTURADO! ---'); 
+                debugger; // Forzar una pausa para confirmar que la función se ejecuta.
+
                 evt.preventDefault(); 
                 
-                // Ignorar el toque si el overlay inicial aún está visible
-                if (document.getElementById('ar-overlay').style.display !== 'none') {
-                    return;
-                }
-                
-                // Si el evento vino del botón de A-Frame (la UI), lo ignoramos para evitar doble ejecución
+                // Si el evento vino de la UI de A-Frame (el botón de salida, por ejemplo), lo ignoramos.
                 if (evt.target.id === 'vr-button') return;
 
-
-                console.log('DEBUG: Evento TOUCHEND (Toque Táctil) disparado.');
                 console.log(`DEBUG: hitTestReady=${this.hitTestReady}, hitTestState=${this.hitTestState}`);
 
-                // Solo colocamos si hay un plano detectado (cursor visible)
+                // 4. Lógica de colocación
                 if (this.hitTestState && this.hitTestReady) {
                     const newObject = document.createElement('a-entity');
                     const cursorPosition = this.template.getAttribute('position');
                     
-                    // Configuración del objeto (Caja giratoria azul)
+                    // Configuración del objeto
                     newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
                     newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
-                    // Elevar el objeto un poco sobre la superficie para evitar Z-fighting
                     newObject.setAttribute('position', `${cursorPosition.x} ${cursorPosition.y + 0.1} ${cursorPosition.z}`); 
                     newObject.setAttribute('shadow', '');
                     newObject.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
@@ -170,7 +175,6 @@
                     this.objectCount++;
                     this.statusEl.textContent = `Objeto ${this.objectCount} colocado. Siga escaneando.`;
                 } else if (this.hitTestReady) {
-                    // Si toca y no hay superficie
                     this.statusEl.textContent = '¡No hay superficie detectada! Mueva su móvil para escanear.';
                 }
             }
@@ -183,18 +187,15 @@
             const statusEl = document.getElementById('status-message');
             
             overlay.style.opacity = '0';
-            // Ocultar después de la transición
             setTimeout(() => {
                 overlay.style.display = 'none';
                 statusEl.textContent = 'Activando cámara y detección de superficies...';
-                // Intenta entrar al modo AR. Esto activa la cámara y el motor WebXR.
                 scene.enterAR();
             }, 300); 
         }
 
         // Configuración inicial de A-Frame
         document.addEventListener('DOMContentLoaded', () => {
-            // Asocia la función startAR al botón
             document.getElementById('start-ar-button').addEventListener('click', startAR);
         });
     </script>
@@ -211,16 +212,15 @@
         renderer="logarithmicDepthBuffer: true; antialias: true; outputEncoding: sRGB"
         vr-mode-ui="enabled: false"
         
-        <!-- Configuración de WebXR: Requerir la prueba de impacto (hit-test) para AR -->
         webxr="requiredFeatures: [hit-test, local-floor]; 
                optionalFeatures: [dom-overlay, unmanaged-fading]; 
                referenceSpaceType: local-floor">
         
-        <!-- Luces: Esenciales para que los objetos no se vean planos -->
+        <!-- Luces -->
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
         <a-entity light="type: directional; color: #FFF; intensity: 0.8; castShadow: true" position="-1 2 1"></a-entity>
         
-        <!-- Cámara: Necesaria, A-Frame la gestiona en modo AR -->
+        <!-- Cámara -->
         <a-camera user-height="0"></a-camera>
 
         <!-- EL CURSOR DE PUNTERÍA AR -->
@@ -228,7 +228,6 @@
             id="ar-cursor" 
             position="0 0 -0.5">
             
-            <!-- Template del objeto que se usará como cursor (un anillo verde que pulsa) -->
             <a-entity 
                 id="object-template"
                 geometry="primitive: torus; radius: 0.05; radiusTubular: 0.005; segmentsRadial: 16; segmentsTubular: 12"
@@ -246,7 +245,6 @@
         ============================================================
     -->
 
-    <!-- Overlay de inicio: El botón de clic explícito -->
     <div id="ar-overlay" class="transition duration-300 ease-in-out">
         <div class="p-6 max-w-sm bg-white rounded-xl shadow-2xl space-y-4 transform scale-100 md:scale-110">
             <h1 class="text-2xl font-bold text-gray-900">Iniciar AR</h1>
@@ -260,7 +258,6 @@
         </div>
     </div>
 
-    <!-- Mensaje de estado en la parte inferior de la pantalla -->
     <div id="status-message" class="text-sm rounded-t-lg shadow-2xl">
         Esperando inicio de AR...
     </div>
