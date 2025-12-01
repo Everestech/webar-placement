@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos (Final Fix)</title>
+    <title>WebAR: Colocación de Objetos (Touch End Fix)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -93,15 +93,22 @@
                 // 1. Escuchar cuando el modo AR se activa
                 this.sceneEl.addEventListener('enter-vr', (evt) => {
                     if (this.sceneEl.is('ar-mode')) {
-                        console.log('DEBUG: ENTER-VR OK. AR mode activo. Inicializando listeners con MouseUp.');
+                        console.log('DEBUG: ENTER-VR OK. AR mode activo. Inicializando listeners táctiles.');
                         this.hitTestReady = true;
                         this.statusEl.textContent = '¡Cámara activada! Mueva lentamente el móvil para escanear el suelo y detectar superficies.';
                         
-                        // Usamos mouseup en el canvas, ya que el evento 'click' suele ser bloqueado por WebXR.
                         const canvas = this.sceneEl.canvas;
                         if (canvas) {
-                            canvas.addEventListener('mouseup', this.placeObject.bind(this));
-                            console.log('DEBUG: Listener "mouseup" adjuntado al Canvas.');
+                            // *** CAMBIOS CRÍTICOS: Uso de touchstart y touchend ***
+                            // touchstart previene el comportamiento nativo (scroll/zoom)
+                            canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+                            // touchend es el evento que disparamos para la colocación
+                            canvas.addEventListener('touchend', this.placeObject.bind(this));
+                            
+                            // Fallback para PC (ratón)
+                            canvas.addEventListener('mouseup', this.placeObject.bind(this)); 
+
+                            console.log('DEBUG: Listeners "touchstart", "touchend" y "mouseup" adjuntados al Canvas.');
                         } else {
                             console.error('DEBUG: ERROR - Canvas no encontrado.');
                         }
@@ -141,6 +148,12 @@
                 });
             },
             
+            // Función para prevenir el comportamiento nativo del touch
+            handleTouchStart: function(evt) {
+                // Previene el scroll o zoom del navegador al tocar
+                evt.preventDefault(); 
+            },
+
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
                 // Si el evento vino del botón de A-Frame (la UI), lo ignoramos.
@@ -149,7 +162,7 @@
                 evt.preventDefault(); 
                 
                 // Mantenemos el log de depuración para confirmar que se activa
-                console.log('DEBUG: --- ¡EVENTO TÁCTIL CAPTURADO (MouseUp)! ---'); 
+                console.log(`DEBUG: --- ¡EVENTO CAPTURADO! Tipo: ${evt.type} ---`); 
                 
                 // Si tienes abierto el DevTools, el debugger se detendrá aquí:
                 // debugger; 
@@ -164,6 +177,7 @@
                     // Configuración del objeto
                     newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
                     newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
+                    // Elevamos ligeramente el objeto para que no quede incrustado
                     newObject.setAttribute('position', `${cursorPosition.x} ${cursorPosition.y + 0.1} ${cursorPosition.z}`); 
                     newObject.setAttribute('shadow', '');
                     newObject.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
@@ -209,7 +223,6 @@
         renderer="logarithmicDepthBuffer: true; antialias: true; outputEncoding: sRGB"
         vr-mode-ui="enabled: false"
         
-        <!-- *** CAMBIO CRÍTICO AQUÍ: Eliminación de corchetes y limpieza de espacios *** -->
         webxr="requiredFeatures: hit-test,local-floor; 
                optionalFeatures: dom-overlay,unmanaged-fading; 
                referenceSpaceType: local-floor">
