@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos (Final Fix de Eventos)</title>
+    <title>WebAR: Colocación de Objetos (Hit Test Robusto)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -81,8 +81,8 @@
                 this.statusEl = document.getElementById('status-message');
                 this.cursorEl = document.getElementById('ar-cursor');
                 this.objectCount = 0;
-                this.hitTestState = false; 
                 this.hitTestReady = false; 
+                this.lastValidPosition = null; // <-- NUEVA VARIABLE: Guarda la última posición 3D válida.
 
                 // Clonar el objeto cursor (template) y usarlo como marcador
                 this.template = document.getElementById('object-template').cloneNode(true);
@@ -97,8 +97,7 @@
                         this.hitTestReady = true;
                         this.statusEl.textContent = '¡Cámara activada! Mueva lentamente el móvil para escanear el suelo y detectar superficies.';
                         
-                        // *** CORRECCIÓN CRÍTICA: Adjuntar el listener 'mouseup' directamente a la escena ***
-                        // Esto garantiza que el toque (touch) del móvil se traduzca correctamente.
+                        // Adjuntar el listener 'mouseup' directamente a la escena para capturar touch/click.
                         this.sceneEl.addEventListener('mouseup', this.placeObject.bind(this)); 
                         
                         console.log('DEBUG: Listener "mouseup" adjuntado al elemento <a-scene>.');
@@ -112,16 +111,17 @@
                     if (evt.detail.intersection) {
                         const position = evt.detail.intersection.point;
                         
+                        // --- LÓGICA CLAVE: GUARDAR ÚLTIMA POSICIÓN VÁLIDA ---
+                        this.lastValidPosition = position; 
+                        
                         // Mueve el cursor a la posición detectada
                         this.template.setAttribute('position', position);
                         this.template.setAttribute('visible', 'true');
                         this.statusEl.textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar el objeto.';
-                        this.hitTestState = true;
                     } else {
-                        // No hay intersección
+                        // Si se pierde la intersección, ocultamos el cursor, pero MANTENEMOS la última posición guardada
                         this.template.setAttribute('visible', 'false');
                         this.statusEl.textContent = 'Mueva lentamente el móvil para escanear y encontrar superficies...';
-                        this.hitTestState = false;
                     }
                 });
 
@@ -147,12 +147,13 @@
                 
                 // Mantenemos el log de depuración para confirmar que se activa
                 console.log(`DEBUG: --- ¡EVENTO CAPTURADO! Tipo: ${evt.type} ---`); 
-                console.log(`DEBUG: hitTestReady=${this.hitTestReady}, hitTestState=${this.hitTestState}`);
+                console.log(`DEBUG: hitTestReady=${this.hitTestReady}, lastValidPosition=${!!this.lastValidPosition}`);
 
-                // 4. Lógica de colocación
-                if (this.hitTestState && this.hitTestReady) {
+                // 4. Lógica de colocación: Usar la última posición válida si existe
+                if (this.hitTestReady && this.lastValidPosition) {
                     const newObject = document.createElement('a-entity');
-                    const cursorPosition = this.template.getAttribute('position');
+                    // Usamos la posición guardada
+                    const cursorPosition = this.lastValidPosition;
                     
                     // Configuración del objeto
                     newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
@@ -166,7 +167,7 @@
                     this.objectCount++;
                     this.statusEl.textContent = `Objeto ${this.objectCount} colocado. Siga escaneando.`;
                 } else if (this.hitTestReady) {
-                    this.statusEl.textContent = '¡No hay superficie detectada! Mueva su móvil para escanear.';
+                    this.statusEl.textContent = '¡No hay superficie detectada en el momento del toque! Asegúrese de ver el cursor verde.';
                 }
             }
         });
@@ -203,7 +204,6 @@
         renderer="logarithmicDepthBuffer: true; antialias: true; outputEncoding: sRGB"
         vr-mode-ui="enabled: false"
         
-        <!-- Eliminamos las características opcionales problemáticas -->
         webxr="requiredFeatures: hit-test,local-floor; 
                referenceSpaceType: local-floor">
         
@@ -239,8 +239,8 @@
     <div id="ar-overlay" class="transition duration-300 ease-in-out">
         <div class="p-6 max-w-sm bg-white rounded-xl shadow-2xl space-y-4 transform scale-100 md:scale-110">
             <h1 class="text-2xl font-bold text-gray-900">Iniciar AR</h1>
-            <p class="text-gray-600">Esta versión utiliza la función WebXR nativa para la máxima compatibilidad.</p>
-            <p class="text-sm text-red-500 font-semibold">Mueva el móvil para escanear el suelo hasta que vea un cursor verde.</p>
+            <p class="text-gray-600">Esta versión utiliza una lógica de hit-test más robusta para evitar fallos de sincronización.</p>
+            <p class="text-sm text-red-500 font-semibold">Mueva el móvil para escanear el suelo hasta que vea el cursor verde. Luego, toque la pantalla.</p>
             <button 
                 id="start-ar-button" 
                 class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg transform hover:scale-105">
