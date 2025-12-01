@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos (Touch End Fix)</title>
+    <title>WebAR: Colocación de Objetos (Final Fix de Eventos)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -93,25 +93,15 @@
                 // 1. Escuchar cuando el modo AR se activa
                 this.sceneEl.addEventListener('enter-vr', (evt) => {
                     if (this.sceneEl.is('ar-mode')) {
-                        console.log('DEBUG: ENTER-VR OK. AR mode activo. Inicializando listeners táctiles.');
+                        console.log('DEBUG: ENTER-VR OK. AR mode activo. Adjuntando listener a la escena.');
                         this.hitTestReady = true;
                         this.statusEl.textContent = '¡Cámara activada! Mueva lentamente el móvil para escanear el suelo y detectar superficies.';
                         
-                        const canvas = this.sceneEl.canvas;
-                        if (canvas) {
-                            // *** CAMBIOS CRÍTICOS: Uso de touchstart y touchend ***
-                            // touchstart previene el comportamiento nativo (scroll/zoom)
-                            canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-                            // touchend es el evento que disparamos para la colocación
-                            canvas.addEventListener('touchend', this.placeObject.bind(this));
-                            
-                            // Fallback para PC (ratón)
-                            canvas.addEventListener('mouseup', this.placeObject.bind(this)); 
-
-                            console.log('DEBUG: Listeners "touchstart", "touchend" y "mouseup" adjuntados al Canvas.');
-                        } else {
-                            console.error('DEBUG: ERROR - Canvas no encontrado.');
-                        }
+                        // *** CORRECCIÓN CRÍTICA: Adjuntar el listener 'mouseup' directamente a la escena ***
+                        // Esto garantiza que el toque (touch) del móvil se traduzca correctamente.
+                        this.sceneEl.addEventListener('mouseup', this.placeObject.bind(this)); 
+                        
+                        console.log('DEBUG: Listener "mouseup" adjuntado al elemento <a-scene>.');
                     }
                 });
 
@@ -125,7 +115,7 @@
                         // Mueve el cursor a la posición detectada
                         this.template.setAttribute('position', position);
                         this.template.setAttribute('visible', 'true');
-                        this.statusEl.textContent = 'Superficie LISTA. Toque la pantalla para colocar.';
+                        this.statusEl.textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar el objeto.';
                         this.hitTestState = true;
                     } else {
                         // No hay intersección
@@ -147,26 +137,16 @@
                     this.sceneEl.setAttribute('ar-hit-test', 'doHitTest: true');
                 });
             },
-            
-            // Función para prevenir el comportamiento nativo del touch
-            handleTouchStart: function(evt) {
-                // Previene el scroll o zoom del navegador al tocar
-                evt.preventDefault(); 
-            },
 
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
-                // Si el evento vino del botón de A-Frame (la UI), lo ignoramos.
+                // Si el evento viene del botón de A-Frame (la UI), lo ignoramos.
                 if (evt.target.id === 'vr-button') return;
                 
                 evt.preventDefault(); 
                 
                 // Mantenemos el log de depuración para confirmar que se activa
                 console.log(`DEBUG: --- ¡EVENTO CAPTURADO! Tipo: ${evt.type} ---`); 
-                
-                // Si tienes abierto el DevTools, el debugger se detendrá aquí:
-                // debugger; 
-
                 console.log(`DEBUG: hitTestReady=${this.hitTestReady}, hitTestState=${this.hitTestState}`);
 
                 // 4. Lógica de colocación
@@ -223,8 +203,8 @@
         renderer="logarithmicDepthBuffer: true; antialias: true; outputEncoding: sRGB"
         vr-mode-ui="enabled: false"
         
+        <!-- Eliminamos las características opcionales problemáticas -->
         webxr="requiredFeatures: hit-test,local-floor; 
-               optionalFeatures: dom-overlay,unmanaged-fading; 
                referenceSpaceType: local-floor">
         
         <!-- Luces -->
@@ -260,7 +240,7 @@
         <div class="p-6 max-w-sm bg-white rounded-xl shadow-2xl space-y-4 transform scale-100 md:scale-110">
             <h1 class="text-2xl font-bold text-gray-900">Iniciar AR</h1>
             <p class="text-gray-600">Esta versión utiliza la función WebXR nativa para la máxima compatibilidad.</p>
-            <p class="text-sm text-red-500 font-semibold">Toca el botón. Necesitarás mover el móvil para escanear el entorno.</p>
+            <p class="text-sm text-red-500 font-semibold">Mueva el móvil para escanear el suelo hasta que vea un cursor verde.</p>
             <button 
                 id="start-ar-button" 
                 class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg transform hover:scale-105">
