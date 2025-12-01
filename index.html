@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos (Forzando MouseUp)</title>
+    <title>WebAR: Colocación de Objetos (Final Fix)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -97,14 +97,11 @@
                         this.hitTestReady = true;
                         this.statusEl.textContent = '¡Cámara activada! Mueva lentamente el móvil para escanear el suelo y detectar superficies.';
                         
-                        // **** CAMBIO CRÍTICO: Usar mouseup en el canvas de A-Frame ****
-                        // Mouseup es a menudo el evento más fiable para un "tap" en el canvas de Three.js/A-Frame.
-                        // También añadimos 'click' como fallback.
+                        // Usamos mouseup en el canvas, ya que el evento 'click' suele ser bloqueado por WebXR.
                         const canvas = this.sceneEl.canvas;
                         if (canvas) {
                             canvas.addEventListener('mouseup', this.placeObject.bind(this));
-                            canvas.addEventListener('click', this.placeObject.bind(this));
-                            console.log('DEBUG: Listeners "mouseup" y "click" adjuntados al Canvas.');
+                            console.log('DEBUG: Listener "mouseup" adjuntado al Canvas.');
                         } else {
                             console.error('DEBUG: ERROR - Canvas no encontrado.');
                         }
@@ -146,16 +143,16 @@
             
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
-                // ***** CRÍTICO: Pausa para depuración *****
-                // Esto DEBE aparecer en el panel de Fuentes/Sources de DevTools y detener la ejecución.
-                // Si la ejecución se detiene aquí, el problema es la lógica interna (hitTestState/Ready), no el evento.
-                console.log('DEBUG: --- ¡EVENTO TÁCTIL CAPTURADO! ---'); 
-                debugger; // Forzar una pausa para confirmar que la función se ejecuta.
-
+                // Si el evento vino del botón de A-Frame (la UI), lo ignoramos.
+                if (evt.target.id === 'vr-button') return;
+                
                 evt.preventDefault(); 
                 
-                // Si el evento vino de la UI de A-Frame (el botón de salida, por ejemplo), lo ignoramos.
-                if (evt.target.id === 'vr-button') return;
+                // Mantenemos el log de depuración para confirmar que se activa
+                console.log('DEBUG: --- ¡EVENTO TÁCTIL CAPTURADO (MouseUp)! ---'); 
+                
+                // Si tienes abierto el DevTools, el debugger se detendrá aquí:
+                // debugger; 
 
                 console.log(`DEBUG: hitTestReady=${this.hitTestReady}, hitTestState=${this.hitTestState}`);
 
@@ -212,8 +209,9 @@
         renderer="logarithmicDepthBuffer: true; antialias: true; outputEncoding: sRGB"
         vr-mode-ui="enabled: false"
         
-        webxr="requiredFeatures: [hit-test, local-floor]; 
-               optionalFeatures: [dom-overlay, unmanaged-fading]; 
+        <!-- *** CAMBIO CRÍTICO AQUÍ: Eliminación de corchetes y limpieza de espacios *** -->
+        webxr="requiredFeatures: hit-test,local-floor; 
+               optionalFeatures: dom-overlay,unmanaged-fading; 
                referenceSpaceType: local-floor">
         
         <!-- Luces -->
