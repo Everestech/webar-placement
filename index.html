@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Colocación de Objetos a Prueba de Fallos</title>
+    <title>WebAR: Hit-Test Manual (Patrón WebXR Puro)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,10 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
     
     <style>
-        /* Estilos generales */
+        /* Estilos generales y UI */
         body { margin: 0; padding: 0; }
-
-        /* Estilos específicos para la UI */
         #status-message {
             z-index: 1000;
             position: fixed;
@@ -28,8 +26,6 @@
             font-family: 'Inter', sans-serif;
             transition: opacity 0.3s ease;
         }
-
-        /* Estilo para el overlay de inicio */
         #ar-overlay {
             z-index: 1010;
             position: fixed;
@@ -46,20 +42,15 @@
             color: white;
             backdrop-filter: blur(5px);
         }
-
-        /* Asegura que la escena ocupe toda la pantalla */
         a-scene {
             height: 100vh;
             width: 100vw;
             --aframe-scene-button-display: none; 
         }
-
-        /* Estilo para el cursor visual */
         #ar-cursor-visual {
             opacity: 0.8;
             animation: pulse 1.5s infinite alternate;
         }
-
         @keyframes pulse {
             from { transform: scale(1); }
             to { transform: scale(1.2); }
@@ -70,73 +61,139 @@
 
     <!-- 
         ============================================================
-        Componente JavaScript para la Lógica de Colocación
+        Componente JavaScript: Lógica WebXR Pura
         ============================================================
     -->
     <script>
-        // Componente para manejar la colocación al hacer clic o tocar
+        // Componente que implementa manualmente el hit-test siguiendo el patrón WebXR
+        AFRAME.registerComponent('robust-hit-test', {
+            schema: {
+                targetEl: {type: 'selector'} // El retículo que queremos posicionar
+            },
+            init: function () {
+                this.xrSession = null;
+                this.xrRefSpace = null;
+                this.xrHitTestSource = null;
+                this.reticleEl = this.data.targetEl;
+                this.reticleEl.setAttribute('visible', false); // Inicialmente invisible
+
+                this.onEnterVR = this.onEnterVR.bind(this);
+                this.el.sceneEl.addEventListener('enter-vr', this.onEnterVR);
+                this.el.sceneEl.addEventListener('exit-vr', this.onExitVR.bind(this));
+            },
+
+            onEnterVR: async function () {
+                // Solo nos interesa el modo AR
+                if (!this.el.sceneEl.is('ar-mode')) {
+                    return;
+                }
+
+                try {
+                    this.xrSession = this.el.sceneEl.renderer.xr.getSession();
+                    
+                    // 1. Obtener el referenceSpace 'local' (el mundo base)
+                    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local');
+                    
+                    // 2. Obtener el referenceSpace 'viewer' (la posición de la cámara)
+                    const xrViewerSpace = await this.xrSession.requestReferenceSpace('viewer');
+
+                    // 3. Crear el Hit Test Source usando el espacio del visor (el origen del rayo)
+                    this.xrHitTestSource = await this.xrSession.requestHitTestSource({ 
+                        space: xrViewerSpace 
+                    });
+
+                    console.log('DEBUG: Hit Test Source y Reference Spaces configurados correctamente.');
+
+                } catch (e) {
+                    console.error('ERROR al configurar WebXR Hit Test:', e);
+                    document.getElementById('status-message').textContent = 'Error: ' + e.message;
+                }
+            },
+            
+            onExitVR: function () {
+                // Limpieza del hit test source al salir de AR
+                if (this.xrHitTestSource) {
+                    this.xrHitTestSource.cancel();
+                    this.xrHitTestSource = null;
+                }
+                this.xrSession = null;
+                this.xrRefSpace = null;
+                this.reticleEl.setAttribute('visible', false);
+            },
+
+            // La función tick de A-Frame se ejecuta en cada fotograma
+            tick: function () {
+                // Solo si estamos en AR y tenemos el Hit Test Source
+                if (!this.el.sceneEl.is('ar-mode') || !this.xrHitTestSource || !this.xrRefSpace) {
+                    return;
+                }
+
+                const xrFrame = this.el.sceneEl.frame;
+                if (!xrFrame) return;
+
+                // 4. Obtener resultados del Hit Test en el frame actual
+                const hitTestResults = xrFrame.getHitTestResults(this.xrHitTestSource);
+
+                if (hitTestResults.length > 0) {
+                    // Hay un resultado válido
+                    this.reticleEl.setAttribute('visible', true);
+                    document.getElementById('status-message').textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar.';
+                    
+                    // Obtener la pose (matriz de transformación) en el sistema de coordenadas 'local'
+                    const pose = hitTestResults[0].getPose(this.xrRefSpace);
+                    
+                    if (pose) {
+                        // Usar la matriz de transformación directamente (el patrón más fiel a tu ejemplo)
+                        this.reticleEl.object3D.matrix.fromArray(pose.transform.matrix);
+                        this.reticleEl.object3D.matrixNeedsUpdate = true;
+                    }
+                } else {
+                    // No hay detección de superficie
+                    this.reticleEl.setAttribute('visible', false);
+                    document.getElementById('status-message').textContent = 'Mueva el móvil para escanear y encontrar superficies...';
+                }
+            }
+        });
+
+
+        // Componente para la colocación de objetos (adjuntado a la escena)
         AFRAME.registerComponent('placement-handler', {
             init: function () {
                 this.sceneEl = this.el;
-                this.statusEl = document.getElementById('status-message');
-                this.cameraEl = document.getElementById('ar-camera'); // Referencia a la cámara
+                this.cursorEl = document.getElementById('ar-cursor-visual');
                 this.objectCount = 0;
                 this.arModeActive = false;
-                this.cursorEl = document.getElementById('ar-cursor-visual');
                 
-                // 1. Escuchar cuando el modo AR se activa (entrada de WebXR)
                 this.sceneEl.addEventListener('enter-vr', (evt) => {
                     if (this.sceneEl.is('ar-mode')) {
                         this.arModeActive = true;
-                        this.statusEl.textContent = 'Mueva el móvil para escanear y encontrar superficies...';
-
                         // Usamos el evento 'select' de WebXR para la interacción (toque/clic)
                         this.sceneEl.addEventListener('select', this.placeObject.bind(this)); 
-                        console.log('DEBUG: Listener "select" (WebXR) adjuntado a la escena.');
-                    }
-                });
-                
-                // 2. Escuchar los eventos de 'ar-hit-test' desde la CÁMARA
-                this.cameraEl.addEventListener('ar-hit-test-update', (evt) => {
-                    console.log('DEBUG: Evento ar-hit-test-update disparado. Éxito:', evt.detail.successful);
-                    
-                    // Si el hit-test fue exitoso, el cursor es visible y podemos colocar
-                    if (evt.detail.successful) {
-                        this.cursorEl.setAttribute('visible', true);
-                        this.statusEl.textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar.';
-                    } else {
-                        this.cursorEl.setAttribute('visible', false);
-                        this.statusEl.textContent = 'Mueva el móvil para escanear y encontrar superficies...';
                     }
                 });
             },
 
-            // Función para colocar el objeto 3D
-            placeObject: function(evt) {
+            placeObject: function() {
                 if (!this.arModeActive) return;
 
-                // Verificamos si el cursor visual está visible 
-                const isCursorVisible = this.cursorEl.getAttribute('visible');
-
-                if (isCursorVisible) {
-                    // Obtenemos la posición actual del cursor visual
+                // Solo colocamos si el cursor está visible (hay hit-test)
+                if (this.cursorEl.getAttribute('visible')) {
                     const position = this.cursorEl.object3D.position;
                     
                     const newObject = document.createElement('a-entity');
                     
-                    // Configuración del objeto (una caja azul que rota)
+                    // Objeto de ejemplo
                     newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
                     newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
-                    // Usamos la posición del cursor (con un pequeño offset en Y)
                     newObject.setAttribute('position', `${position.x} ${position.y + 0.1} ${position.z}`); 
                     newObject.setAttribute('shadow', '');
                     newObject.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
                     
                     this.sceneEl.appendChild(newObject);
                     this.objectCount++;
-                    this.statusEl.textContent = `Objeto ${this.objectCount} colocado. ¡Siga creando!`;
+                    document.getElementById('status-message').textContent = `Objeto ${this.objectCount} colocado. ¡Siga creando!`;
                 } else {
-                    this.statusEl.textContent = '¡Necesita detectar una superficie! Mueva el móvil.';
+                    document.getElementById('status-message').textContent = '¡Necesita detectar una superficie para colocar el objeto!';
                 }
             }
         });
@@ -145,13 +202,10 @@
         function startAR() {
             const scene = document.getElementById('ar-scene');
             const overlay = document.getElementById('ar-overlay');
-            const statusEl = document.getElementById('status-message');
             
             overlay.style.opacity = '0';
             setTimeout(() => {
                 overlay.style.display = 'none';
-                statusEl.textContent = 'Activando cámara y detección de superficies...';
-                // Inicia la sesión AR
                 scene.enterAR();
             }, 300); 
         }
@@ -164,40 +218,35 @@
 
     <!-- 
         ============================================================
-        Estructura de la Escena A-Frame (El "Mundo 3D")
+        Estructura de la Escena A-Frame
         ============================================================
     -->
     <a-scene 
         id="ar-scene"
         embedded 
-        placement-handler 
+        placement-handler
         renderer="logarithmicDepthBuffer: true; antialias: true" 
         vr-mode-ui="enabled: false"
         
-        <!-- Configuración de WebXR: 'local' es el tipo de referencia más compatible. -->
+        <!-- Configuración de WebXR: requerimos 'hit-test' y 'local' -->
         webxr="requiredFeatures: hit-test, local; referenceSpaceType: local">
         
-        <!-- Luces: Imprescindible para ver objetos -->
+        <!-- Luces -->
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
         <a-entity light="type: directional; color: #FFF; intensity: 0.8; castShadow: true" position="-1 2 1"></a-entity>
         
-        <!-- 
-            CÁMARA
-            FIX CLAVE: El componente ar-hit-test debe estar aquí para que el hit-test se ejecute en cada frame XR. 
-            El targetEl es el retículo que queremos posicionar.
-        -->
+        <!-- CÁMARA: Contiene el componente robusto de hit-test -->
         <a-camera 
             id="ar-camera" 
             user-height="0" 
             position="0 0 0" 
             rotation="0 0 0"
-            ar-hit-test="doHitTest: true; targetEl: #ar-cursor-visual">
+            
+            <!-- Componente CLAVE: Ejecuta la lógica WebXR pura en cada fotograma -->
+            robust-hit-test="targetEl: #ar-cursor-visual">
         </a-camera>
         
-        <!-- 
-            CURSOR VISUAL (Entidad Target)
-            Ya NO tiene el componente ar-hit-test. Su posición es controlada por el componente en la cámara.
-        -->
+        <!-- CURSOR VISUAL: Es el TARGET, posicionado por el componente de la cámara -->
         <a-entity 
             id="ar-cursor-visual"
             geometry="primitive: torus; radius: 0.05; radiusTubular: 0.005; segmentsRadial: 16; segmentsTubular: 12"
@@ -216,9 +265,9 @@
 
     <div id="ar-overlay" class="transition duration-300 ease-in-out">
         <div class="p-6 max-w-sm bg-white rounded-xl shadow-2xl space-y-4 transform scale-100 md:scale-110">
-            <h1 class="text-2xl font-bold text-gray-900">Iniciar AR</h1>
-            <p class="text-gray-600">Este es el intento final, siguiendo el patrón robusto de A-Frame: `ar-hit-test` en la cámara.</p>
-            <p class="text-sm text-red-500 font-semibold">Mueva el móvil lentamente para escanear el entorno. Cuando vea el cursor verde, toque la pantalla para colocar un objeto.</p>
+            <h1 class="text-2xl font-bold text-gray-900">Iniciar AR (Fix Pura WebXR)</h1>
+            <p class="text-gray-600">Se ha implementado la lógica de Hit Test directamente con la API nativa de WebXR (similar a tu código exitoso).</p>
+            <p class="text-sm text-red-500 font-semibold">Mueva el móvil lentamente para escanear el entorno. El cursor verde debería aparecer en las superficies.</p>
             <button 
                 id="start-ar-button" 
                 class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg transform hover:scale-105">
