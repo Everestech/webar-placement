@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Solución Three.js Pura y Táctil</title>
+    <title>WebAR Universal (Android WebXR | iOS Quick Look)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Three.js para renderizado 3D -->
+    <!-- Three.js para renderizado 3D (para Android/WebXR) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     
+    <!-- Model Viewer para iOS Quick Look y Fallback (ESENCIAL para iOS) -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/1.12.0/model-viewer.min.js"></script>
+
     <style>
         /* Estilos generales y UI */
         body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; height: 100vh; width: 100vw; overflow: hidden; }
@@ -60,25 +63,54 @@
         Cargando WebAR...
     </div>
 
-    <!-- Overlay de inicio con el botón que inicia la sesión AR -->
+    <!-- Overlay de inicio con botones de detección dinámica -->
     <div id="start-overlay">
         <h1 class="text-2xl font-bold text-white mb-6">Iniciar Experiencia de Realidad Aumentada</h1>
+        
+        <!-- Botón para Android/WebXR (WebXR lo oculta si funciona) -->
         <button 
-            id="ar-button"
+            id="ar-button-android"
             onclick="initAR()"
-            class="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105"
+            class="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105 mb-4"
         >
-            INICIAR AR
+            INICIAR AR (Android/WebXR)
         </button>
-        <p class="mt-4 text-gray-300 text-sm">Asegúrese de estar en un dispositivo móvil compatible con WebXR.</p>
+
+        <!-- Botón para iOS (Se muestra si se detecta iOS o WebXR falla) -->
+        <!-- Model Viewer se encarga de todo el manejo de Quick Look -->
+        <model-viewer 
+            src="https://modelviewer.dev/shared-assets/models/Astronaut.glb" 
+            alt="Modelo de prueba universal" 
+            ar
+            ar-modes="webxr quick-look scene-viewer"
+            ar-placement="floor"
+            camera-controls
+            shadow-intensity="1"
+            style="width: 0; height: 0; opacity: 0;"
+            id="model-viewer-ios"
+        >
+        </model-viewer>
+        
+        <button 
+            id="ar-button-ios"
+            onclick="document.getElementById('model-viewer-ios').activateAR()"
+            class="hidden px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105"
+        >
+            INICIAR AR (iOS/Quick Look)
+        </button>
+
+        <p class="mt-4 text-gray-300 text-sm" id="platform-info">Detectando plataforma...</p>
     </div>
 
     <!-- 
         ============================================================
-        Script: Lógica de WebXR Pura + Three.js
+        Script: Lógica de WebXR Pura + Three.js + Detección
         ============================================================
     -->
     <script>
+        // --- Constante del modelo para iOS ---
+        const IOS_MODEL_URL = "https://modelviewer.dev/shared-assets/models/Astronaut.glb"; // Modelo de ejemplo
+        
         // Variables de Three.js
         let scene, camera, renderer, reticle;
 
@@ -90,8 +122,37 @@
         let statusMessageEl;
         let objectCount = 0;
         
-        // --- 1. Inicialización de Three.js ---
+        // --- Detección de Plataforma (Agregado para el soporte universal) ---
+        function isIOS() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            // Detección común de iOS
+            return /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+        }
+
+        // --- 1. Inicialización de Three.js y Detección de Plataforma ---
         function initThree() {
+            const isApple = isIOS();
+            statusMessageEl = document.getElementById('status-message');
+            const androidButton = document.getElementById('ar-button-android');
+            const iosButton = document.getElementById('ar-button-ios');
+            const platformInfo = document.getElementById('platform-info');
+
+            if (isApple) {
+                // Si es iOS, ocultamos la funcionalidad WebXR y mostramos el botón Quick Look.
+                androidButton.style.display = 'none';
+                iosButton.classList.remove('hidden');
+                statusMessageEl.textContent = 'Usando Quick Look de iOS. Toque "INICIAR AR" y luego el ícono AR.';
+                platformInfo.textContent = 'Plataforma: iOS (iPhone/iPad). Se usa Model Viewer.';
+                
+                // No necesitamos inicializar Three.js si usamos Quick Look.
+                return;
+            }
+
+            // Si es Android/Otro, inicializamos Three.js
+            platformInfo.textContent = 'Plataforma: Android/Otro. Se usa WebXR (Three.js).';
+            iosButton.style.display = 'none'; // Ocultar el botón iOS si estamos en otra plataforma.
+
+
             // Configurar la escena
             scene = new THREE.Scene();
 
@@ -107,9 +168,6 @@
 
             document.body.appendChild(renderer.domElement);
             
-            // Gestión de la interfaz
-            statusMessageEl = document.getElementById('status-message');
-
             // Añadir iluminación
             const light = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(light);
@@ -133,22 +191,24 @@
 
         function onWindowResize() {
             // Evitar cambiar el tamaño del renderizador si la sesión XR está activa (resuelve la advertencia de la consola)
-            if (xrSession) return;
+            if (xrSession || isIOS()) return;
             
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- 2. Iniciación de WebXR (Llamada por el botón) ---
+        // --- 2. Iniciación de WebXR (Llamada por el botón de Android) ---
         async function initAR() {
+            if (isIOS()) return; // Ignorar si es iOS, ya que usa Model Viewer
+
             if (!navigator.xr) {
                 statusMessageEl.textContent = 'WebXR no soportado en este dispositivo.';
                 return;
             }
 
             try {
-                // Configurar el renderizador para usar el espacio de referencia más estable para colocación
+                // Configuración robusta para WebXR (Android)
                 renderer.xr.setReferenceSpaceType('local-floor'); 
                 
                 // Solicitud de sesión inmersiva de AR
@@ -156,7 +216,7 @@
                     requiredFeatures: ['local-floor', 'hit-test'] 
                 });
 
-                // Configurar el renderizador con la sesión (Three.js se encarga de la cámara)
+                // Configurar el renderizador con la sesión
                 renderer.xr.setSession(xrSession);
                 
                 // Pedir el espacio de referencia
@@ -174,10 +234,8 @@
                 // Iniciar el bucle de animación de WebXR
                 renderer.setAnimationLoop(onXRFrame);
 
-                // <<<<< CAMBIO CLAVE AQUÍ >>>>>
                 // Usar el evento WebXR 'select' para la interacción táctil en AR
                 xrSession.addEventListener('select', placeObject);
-                // <<<<< FIN CAMBIO CLAVE >>>>>
 
                 // Manejar el fin de la sesión
                 xrSession.addEventListener('end', onXRSessionEnd);
@@ -186,15 +244,18 @@
 
             } catch (e) {
                 console.error('ERROR al iniciar WebXR AR:', e);
-                statusMessageEl.textContent = `Error AR: ${e.name} (${e.message}). Intente con un plano diferente.`;
+                statusMessageEl.textContent = `Error AR: ${e.name}. Su dispositivo no soporta WebXR. Intente con el botón iOS/Quick Look.`;
+                
+                // Si WebXR falla en Android (raro, pero sucede), mostramos la alternativa iOS/Model Viewer
+                document.getElementById('ar-button-android').style.display = 'none';
+                document.getElementById('ar-button-ios').classList.remove('hidden');
             }
         }
 
-        // --- 3. Bucle de Renderizado de WebXR ---
+        // --- 3. Bucle de Renderizado de WebXR (Solo Android) ---
         function onXRFrame(time, frame) {
-            // Error Guardrail: Asegurar que el hit test source existe antes de usarlo
+            // Error Guardrail: Asegurar que la sesión esté activa y configurada
             if (!xrSession || !xrHitTestSource || !frame || !xrRefSpace) {
-                // Si la sesión aún no está totalmente configurada o terminó.
                 renderer.render(scene, camera); 
                 return;
             }
@@ -206,11 +267,9 @@
                 reticle.visible = true;
                 statusMessageEl.textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar el objeto.';
                 
-                // Usar el primer resultado del hit-test
                 const pose = hitTestResults[0].getPose(xrRefSpace);
                 
                 if (pose) {
-                    // Aplicar la pose al retículo
                     reticle.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
                 }
             } else {
@@ -218,14 +277,12 @@
                 statusMessageEl.textContent = 'Mueva el móvil para escanear y encontrar superficies...';
             }
             
-            // --- B. Renderizado (Automáticamente gestionado por Three.js XR) ---
+            // --- B. Renderizado
             renderer.render(scene, camera);
         }
 
-        // --- 4. Colocación de Objetos (Llamada por el evento 'select' de WebXR) ---
-        // Nota: Este manejador de eventos no necesita el evento del ratón/touch.
+        // --- 4. Colocación de Objetos (Solo Android/WebXR) ---
         function placeObject() {
-            // Verificamos si el retículo es visible (si hay una superficie detectada)
             if (!xrSession || !reticle.visible) {
                 statusMessageEl.textContent = 'No se puede colocar: primero debe detectar una superficie.';
                 return;
@@ -253,35 +310,38 @@
         function animateObjects() {
             requestAnimationFrame(animateObjects);
             
-            // Rotar todos los objetos que tengan userData.isAnimated = true
-            scene.children.forEach(obj => {
-                if (obj.userData.isAnimated) {
-                    obj.rotation.y += obj.userData.rotationSpeed;
-                }
-            });
+            // Solo animar si Three.js está inicializado (no en iOS)
+            if (scene) {
+                scene.children.forEach(obj => {
+                    if (obj.userData.isAnimated) {
+                        obj.rotation.y += obj.userData.rotationSpeed;
+                    }
+                });
+            }
         }
 
 
-        // --- 6. Manejo de Fin de Sesión ---
+        // --- 6. Manejo de Fin de Sesión (Solo Android/WebXR) ---
         function onXRSessionEnd() {
             xrSession = null;
             xrRefSpace = null;
             xrHitTestSource = null;
             renderer.setAnimationLoop(null); 
             
-            // Desvincular el evento select
             if (xrSession) {
                 xrSession.removeEventListener('select', placeObject);
             }
             
-            reticle.visible = false;
+            if (reticle) {
+                reticle.visible = false;
+            }
             document.getElementById('start-overlay').style.display = 'flex';
             statusMessageEl.textContent = 'Sesión AR terminada. Presione INICIAR AR para comenzar de nuevo.';
         }
 
-        // Iniciar Three.js al cargar la ventana
+        // Iniciar al cargar la ventana
         window.onload = function() {
-            initThree();
+            initThree(); // Llama a la inicialización dinámica de plataforma
             animateObjects(); 
         };
     </script>
