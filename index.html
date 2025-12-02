@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Solución Híbrida Confiable</title>
+    <title>WebAR: Colocación de Objetos (Componentes A-Frame)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -18,21 +18,6 @@
         a-scene {
             height: 100vh;
             width: 100vw;
-        }
-
-        /* Overlay para el botón de inicio */
-        #start-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            z-index: 2000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
         }
 
         /* Mensaje de estado en la parte inferior */
@@ -64,128 +49,134 @@
 
     <!-- 
         ============================================================
-        Script: Lógica de WebXR Pura + A-Frame Render
+        Componente JavaScript: Lógica de Hit-Test y Colocación
         ============================================================
     -->
     <script>
-        // Variables Globales
-        let scene, reticleEl;
-        let xrSession = null;
-        let xrRefSpace = null;
-        let xrHitTestSource = null;
-        let objectCount = 0;
-        let canvas = null;
+        // Componente que implementa el hit-test para AR, usando la sesión gestionada por A-Frame
+        AFRAME.registerComponent('ar-placement-manager', {
+            schema: {
+                reticle: {type: 'selector'} // El retículo (cursor) que queremos posicionar
+            },
+            init: function () {
+                this.xrSession = null;
+                this.xrRefSpace = null;
+                this.xrHitTestSource = null;
+                this.reticleEl = this.data.reticle;
+                this.reticleEl.setAttribute('visible', false); 
 
-        // Función de inicio llamada por el botón
-        async function startAR() {
-            // 1. Obtener los elementos de A-Frame y el canvas de Three.js
-            scene = document.querySelector('a-scene').sceneEl;
-            reticleEl = document.getElementById('ar-cursor-visual');
-            canvas = scene.renderer.domElement;
-            
-            if (!navigator.xr) {
-                document.getElementById('status-message').textContent = 'WebXR no soportado en este navegador/dispositivo.';
-                return;
-            }
+                this.objectCount = 0;
+                this.statusMessageEl = document.getElementById('status-message');
 
-            // 2. Intentar solicitar la sesión AR inmersiva (el método más directo)
-            try {
-                xrSession = await navigator.xr.requestSession('immersive-ar', { 
-                    requiredFeatures: ['hit-test', 'local']
-                });
+                this.onEnterVR = this.onEnterVR.bind(this);
+                this.onExitVR = this.onExitVR.bind(this);
+                this.placeObject = this.placeObject.bind(this);
 
-                // 3. Configurar el renderizador de A-Frame para la sesión
-                // Esto es crucial para que A-Frame use la cámara de la sesión AR
-                scene.renderer.xr.setSession(xrSession);
+                // Escuchar cuando A-Frame inicia el modo inmersivo (AR o VR)
+                this.el.sceneEl.addEventListener('enter-vr', this.onEnterVR);
+                this.el.sceneEl.addEventListener('exit-vr', this.onExitVR);
                 
-                // 4. Configurar espacios de referencia y Hit Test
-                xrRefSpace = await xrSession.requestReferenceSpace('local');
-                const xrViewerSpace = await xrSession.requestReferenceSpace('viewer');
-                xrHitTestSource = await xrSession.requestHitTestSource({ space: xrViewerSpace });
-                
-                // 5. Ocultar la UI de inicio y actualizar estado
-                document.getElementById('start-overlay').style.display = 'none';
-                document.getElementById('status-message').textContent = 'Escaneando superficie... Mueva el móvil lentamente.';
+                // Escuchar el click universal de A-Frame (funciona para mouse y touch/tap)
+                this.el.sceneEl.addEventListener('click', this.placeObject);
 
-                // 6. Iniciar el bucle de renderizado WebXR manual (sustituyendo el de A-Frame)
-                xrSession.requestAnimationFrame(onXRFrame);
+                this.statusMessageEl.textContent = 'Presione el botón AR (ícono cuadrado abajo a la derecha) para empezar.';
+            },
 
-                // 7. Agregar listener de click al canvas (este evento sí es confiable)
-                canvas.addEventListener('click', placeObject);
+            onEnterVR: async function () {
+                // Solo si es modo AR
+                if (!this.el.sceneEl.is('ar-mode')) return;
 
-                // 8. Manejar el fin de la sesión
-                xrSession.addEventListener('end', onXRSessionEnd);
+                try {
+                    this.xrSession = this.el.sceneEl.renderer.xr.getSession();
+                    
+                    // Pedir el reference space 'local' (el más básico y compatible)
+                    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local');
+                    
+                    // Obtener el espacio del visor para lanzar el rayo
+                    const xrViewerSpace = await this.xrSession.requestReferenceSpace('viewer');
 
-            } catch (e) {
-                console.error('Fallo la Iniciación de WebXR AR:', e);
-                document.getElementById('status-message').textContent = 'Error al iniciar AR: ' + e.message;
-            }
-        }
+                    // Crear el Hit Test Source
+                    this.xrHitTestSource = await this.xrSession.requestHitTestSource({ 
+                        space: xrViewerSpace 
+                    });
 
-        // Bucle de renderizado y hit-test manual de WebXR
-        function onXRFrame(time, frame) {
-            if (!xrSession) return;
+                    this.statusMessageEl.textContent = 'Escaneando superficie... Mueva el móvil lentamente.';
 
-            // Solicitar el siguiente frame
-            xrSession.requestAnimationFrame(onXRFrame);
-            
-            // Renderizar la escena con A-Frame/Three.js
-            // A-Frame se encarga de actualizar la pose de la cámara automáticamente en el render.
-            scene.renderer.render(scene.object3D, scene.camera.el.object3D);
-
-            // Lógica de Hit Test
-            const hitTestResults = frame.getHitTestResults(xrHitTestSource);
-
-            if (hitTestResults.length > 0) {
-                reticleEl.setAttribute('visible', true);
-                document.getElementById('status-message').textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar el objeto.';
-                
-                const pose = hitTestResults[0].getPose(xrRefSpace);
-                
-                if (pose) {
-                    // Aplicar la transformación directamente al objeto 3D del retículo
-                    reticleEl.object3D.matrix.fromArray(pose.transform.matrix);
-                    reticleEl.object3D.matrixNeedsUpdate = true;
+                } catch (e) {
+                    console.error('ERROR al configurar WebXR Hit Test:', e);
+                    this.statusMessageEl.textContent = `Error AR: ${e.name} - ${e.message}`;
+                    // Forzar salida si falla la configuración para evitar un estado roto
+                    this.el.sceneEl.exitVR();
                 }
-            } else {
-                reticleEl.setAttribute('visible', false);
-                document.getElementById('status-message').textContent = 'Mueva el móvil para escanear y encontrar superficies...';
+            },
+            
+            onExitVR: function () {
+                if (this.xrHitTestSource) {
+                    this.xrHitTestSource.cancel();
+                    this.xrHitTestSource = null;
+                }
+                this.xrSession = null;
+                this.xrRefSpace = null;
+                this.reticleEl.setAttribute('visible', false);
+                this.statusMessageEl.textContent = 'Presione el botón AR para iniciar.';
+            },
+
+            // La función tick se ejecuta en cada fotograma y maneja el hit-test
+            tick: function () {
+                if (!this.xrHitTestSource || !this.xrRefSpace || !this.el.sceneEl.is('ar-mode')) {
+                    return;
+                }
+                
+                // A-Frame proporciona el frame actual
+                const xrFrame = this.el.sceneEl.frame;
+                if (!xrFrame) return;
+
+                const hitTestResults = xrFrame.getHitTestResults(this.xrHitTestSource);
+
+                if (hitTestResults.length > 0) {
+                    this.reticleEl.setAttribute('visible', true);
+                    this.statusMessageEl.textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar.';
+                    
+                    const pose = hitTestResults[0].getPose(this.xrRefSpace);
+                    
+                    if (pose) {
+                        // Aplicar la pose del hit-test directamente al objeto 3D del retículo
+                        this.reticleEl.object3D.matrix.fromArray(pose.transform.matrix);
+                        this.reticleEl.object3D.matrixNeedsUpdate = true;
+                    }
+                } else {
+                    this.reticleEl.setAttribute('visible', false);
+                    this.statusMessageEl.textContent = 'Mueva el móvil para escanear y encontrar superficies...';
+                }
+            },
+
+            placeObject: function() {
+                if (!this.el.sceneEl.is('ar-mode')) {
+                    this.statusMessageEl.textContent = '¡Debe entrar en modo AR primero! Use el botón abajo a la derecha.';
+                    return;
+                }
+                
+                // Solo colocar si el retículo está visible (hit-test exitoso)
+                if (this.reticleEl.getAttribute('visible')) {
+                    const position = this.reticleEl.object3D.position;
+                    
+                    const newObject = document.createElement('a-entity');
+                    
+                    // Objeto de ejemplo: una caja azul giratoria
+                    newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
+                    newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
+                    // Colocamos el objeto justo encima del retículo
+                    newObject.setAttribute('position', `${position.x} ${position.y + 0.1} ${position.z}`); 
+                    newObject.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
+                    
+                    this.el.sceneEl.appendChild(newObject);
+                    this.objectCount++;
+                    this.statusMessageEl.textContent = `¡Objeto ${this.objectCount} colocado! Toque para añadir más.`;
+                } else {
+                    this.statusMessageEl.textContent = 'No se detecta superficie. Mueva el móvil lentamente.';
+                }
             }
-        }
-
-        // Función de colocación llamada por el evento 'click' del canvas
-        function placeObject() {
-            if (!xrSession) return;
-
-            if (reticleEl.getAttribute('visible')) {
-                const position = reticleEl.object3D.position;
-                
-                const newObject = document.createElement('a-entity');
-                
-                // Objeto de ejemplo: una caja azul giratoria
-                newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
-                newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
-                // Colocamos el objeto justo encima del cursor
-                newObject.setAttribute('position', `${position.x} ${position.y + 0.1} ${position.z}`); 
-                newObject.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
-                
-                scene.appendChild(newObject);
-                objectCount++;
-                document.getElementById('status-message').textContent = `¡Objeto ${objectCount} colocado! Toque para añadir más.`;
-            } else {
-                document.getElementById('status-message').textContent = 'No se detecta superficie para colocar. Mueva el móvil.';
-            }
-        }
-
-        // Función para terminar la sesión AR
-        function onXRSessionEnd() {
-            xrSession = null;
-            xrRefSpace = null;
-            xrHitTestSource = null;
-            reticleEl.setAttribute('visible', false);
-            document.getElementById('start-overlay').style.display = 'flex';
-            document.getElementById('status-message').textContent = 'Sesión AR terminada. Presione INICIAR AR para comenzar de nuevo.';
-        }
+        });
     </script>
 
     <!-- 
@@ -196,27 +187,28 @@
     <a-scene 
         id="ar-scene"
         embedded 
+        ar-placement-manager="reticle: #ar-cursor-visual"
         renderer="logarithmicDepthBuffer: true; antialias: true" 
         
-        <!-- Deshabilitamos el UI de A-Frame para usar nuestro propio botón, tal como funciona en tu código original. -->
-        vr-mode-ui="enabled: false"
+        <!-- Habilitamos el UI de A-Frame para que pinte el botón AR (el ícono cuadrado) -->
+        vr-mode-ui="enabled: true" 
         
-        <!-- Requerimos AR, pero no dejamos que A-Frame lo inicie automáticamente. -->
-        webxr="requiredFeatures: hit-test, local; referenceSpaceType: local; optionalFeatures: dom-overlay; requestedReferenceSpaceType: local-floor">
+        <!-- Configuración de WebXR: requerimos 'hit-test' y usamos el referenceSpace 'local' -->
+        webxr="requiredFeatures: hit-test; optionalFeatures: local; referenceSpaceType: local; demandedModes: immersive-ar">
         
         <!-- Luces -->
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
         <a-entity light="type: directional; color: #FFF; intensity: 0.8" position="-1 2 1"></a-entity>
         
-        <!-- CÁMARA (Sin componentes de hit-test, solo el placeholder) -->
+        <!-- CÁMARA: A-Frame la gestiona -->
         <a-camera 
             id="ar-camera" 
-            user-height="0" 
-            position="0 0 0" 
-            rotation="0 0 0">
+            user-height="0">
+            <!-- El cursor para la interacción en 3D (aunque la colocación la gestiona el hit-test) -->
+            <a-cursor fuse="false" raycaster="objects: none;"></a-cursor>
         </a-camera>
         
-        <!-- CURSOR VISUAL: Es el TARGET, posicionado manualmente por la función onXRFrame -->
+        <!-- CURSOR VISUAL: Es el TARGET que nuestro componente de JS va a mover -->
         <a-entity 
             id="ar-cursor-visual"
             geometry="primitive: torus; radius: 0.05; radiusTubular: 0.005; segmentsRadial: 16; segmentsTubular: 12"
@@ -232,20 +224,8 @@
         INTERFAZ DE USUARIO (UI)
         ============================================================
     -->
-    <div id="start-overlay">
-        <h1 class="text-2xl font-bold text-white mb-6">Iniciar Experiencia de Realidad Aumentada</h1>
-        <button 
-            id="ar-button"
-            onclick="startAR()"
-            class="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105"
-        >
-            INICIAR AR
-        </button>
-        <p class="mt-4 text-gray-300 text-sm">Asegúrese de estar en un dispositivo móvil compatible con WebXR.</p>
-    </div>
-
     <div id="status-message">
-        Esperando inicio de AR...
+        Presione el botón AR (ícono cuadrado abajo a la derecha) para empezar.
     </div>
 
 </body>
