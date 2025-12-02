@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Hit-Test Manual (Patrón WebXR Puro)</title>
+    <title>WebAR: Hit-Test Pura y Click Universal</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +14,8 @@
     <style>
         /* Estilos generales y UI */
         body { margin: 0; padding: 0; }
+        
+        /* El mensaje de estado es lo único que controlamos de la UI */
         #status-message {
             z-index: 1000;
             position: fixed;
@@ -21,31 +23,19 @@
             width: 100%;
             background-color: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 1rem;
+            padding: 0.75rem;
             text-align: center;
             font-family: 'Inter', sans-serif;
-            transition: opacity 0.3s ease;
+            font-size: 0.875rem; /* text-sm */
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.1), 0 -2px 4px -2px rgb(0 0 0 / 0.1);
         }
-        #ar-overlay {
-            z-index: 1010;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            color: white;
-            backdrop-filter: blur(5px);
-        }
+        
         a-scene {
             height: 100vh;
             width: 100vw;
-            --aframe-scene-button-display: none; 
+            /* Permitimos que A-Frame muestre su propio botón de entrada AR/VR */
         }
         #ar-cursor-visual {
             opacity: 0.8;
@@ -65,7 +55,7 @@
         ============================================================
     -->
     <script>
-        // Componente que implementa manualmente el hit-test siguiendo el patrón WebXR
+        // Componente que implementa manualmente el hit-test siguiendo el patrón WebXR (el más robusto)
         AFRAME.registerComponent('robust-hit-test', {
             schema: {
                 targetEl: {type: 'selector'} // El retículo que queremos posicionar
@@ -75,7 +65,7 @@
                 this.xrRefSpace = null;
                 this.xrHitTestSource = null;
                 this.reticleEl = this.data.targetEl;
-                this.reticleEl.setAttribute('visible', false); // Inicialmente invisible
+                this.reticleEl.setAttribute('visible', false); 
 
                 this.onEnterVR = this.onEnterVR.bind(this);
                 this.el.sceneEl.addEventListener('enter-vr', this.onEnterVR);
@@ -83,10 +73,7 @@
             },
 
             onEnterVR: async function () {
-                // Solo nos interesa el modo AR
-                if (!this.el.sceneEl.is('ar-mode')) {
-                    return;
-                }
+                if (!this.el.sceneEl.is('ar-mode')) return;
 
                 try {
                     this.xrSession = this.el.sceneEl.renderer.xr.getSession();
@@ -102,16 +89,13 @@
                         space: xrViewerSpace 
                     });
 
-                    console.log('DEBUG: Hit Test Source y Reference Spaces configurados correctamente.');
-
                 } catch (e) {
                     console.error('ERROR al configurar WebXR Hit Test:', e);
-                    document.getElementById('status-message').textContent = 'Error: ' + e.message;
+                    document.getElementById('status-message').textContent = 'Error WebXR: ' + e.message;
                 }
             },
             
             onExitVR: function () {
-                // Limpieza del hit test source al salir de AR
                 if (this.xrHitTestSource) {
                     this.xrHitTestSource.cancel();
                     this.xrHitTestSource = null;
@@ -119,11 +103,11 @@
                 this.xrSession = null;
                 this.xrRefSpace = null;
                 this.reticleEl.setAttribute('visible', false);
+                document.getElementById('status-message').textContent = 'Presione el botón AR para iniciar.';
             },
 
-            // La función tick de A-Frame se ejecuta en cada fotograma
+            // La función tick se ejecuta en cada fotograma para el hit-test
             tick: function () {
-                // Solo si estamos en AR y tenemos el Hit Test Source
                 if (!this.el.sceneEl.is('ar-mode') || !this.xrHitTestSource || !this.xrRefSpace) {
                     return;
                 }
@@ -131,24 +115,20 @@
                 const xrFrame = this.el.sceneEl.frame;
                 if (!xrFrame) return;
 
-                // 4. Obtener resultados del Hit Test en el frame actual
                 const hitTestResults = xrFrame.getHitTestResults(this.xrHitTestSource);
 
                 if (hitTestResults.length > 0) {
-                    // Hay un resultado válido
                     this.reticleEl.setAttribute('visible', true);
                     document.getElementById('status-message').textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar.';
                     
-                    // Obtener la pose (matriz de transformación) en el sistema de coordenadas 'local'
                     const pose = hitTestResults[0].getPose(this.xrRefSpace);
                     
                     if (pose) {
-                        // Usar la matriz de transformación directamente (el patrón más fiel a tu ejemplo)
+                        // Aplicar la matriz de transformación directamente al retículo
                         this.reticleEl.object3D.matrix.fromArray(pose.transform.matrix);
                         this.reticleEl.object3D.matrixNeedsUpdate = true;
                     }
                 } else {
-                    // No hay detección de superficie
                     this.reticleEl.setAttribute('visible', false);
                     document.getElementById('status-message').textContent = 'Mueva el móvil para escanear y encontrar superficies...';
                 }
@@ -156,26 +136,36 @@
         });
 
 
-        // Componente para la colocación de objetos (adjuntado a la escena)
+        // Componente para la colocación de objetos usando el evento 'click' universal de A-Frame
         AFRAME.registerComponent('placement-handler', {
             init: function () {
                 this.sceneEl = this.el;
                 this.cursorEl = document.getElementById('ar-cursor-visual');
                 this.objectCount = 0;
-                this.arModeActive = false;
                 
-                this.sceneEl.addEventListener('enter-vr', (evt) => {
-                    if (this.sceneEl.is('ar-mode')) {
-                        this.arModeActive = true;
-                        // Usamos el evento 'select' de WebXR para la interacción (toque/clic)
-                        this.sceneEl.addEventListener('select', this.placeObject.bind(this)); 
+                // Listener CLAVE: Usa 'click' que A-Frame normaliza para mouse y touch (taps)
+                this.sceneEl.addEventListener('click', this.placeObject.bind(this));
+                
+                // Inicializar mensaje de estado
+                document.getElementById('status-message').textContent = 'Presione el botón AR (abajo a la derecha) para iniciar.';
+
+                // Mostrar advertencia si no hay soporte AR en el navegador
+                this.sceneEl.addEventListener('compatible-webxr', (evt) => {
+                    if (evt.detail.immersiveAr) {
+                         document.getElementById('status-message').textContent = 'Listo. Presione el botón AR (icono cuadrado) para iniciar.';
+                    } else {
+                         document.getElementById('status-message').textContent = 'ADVERTENCIA: Su navegador/dispositivo no soporta WebXR Immersive AR.';
                     }
                 });
             },
 
             placeObject: function() {
-                if (!this.arModeActive) return;
-
+                // Solo colocar si estamos en modo AR
+                if (!this.sceneEl.is('ar-mode')) {
+                    document.getElementById('status-message').textContent = '¡Debe entrar en modo AR primero! Use el botón de abajo a la derecha.';
+                    return;
+                }
+                
                 // Solo colocamos si el cursor está visible (hay hit-test)
                 if (this.cursorEl.getAttribute('visible')) {
                     const position = this.cursorEl.object3D.position;
@@ -185,34 +175,18 @@
                     // Objeto de ejemplo
                     newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
                     newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
+                    // Colocamos el objeto justo encima del cursor
                     newObject.setAttribute('position', `${position.x} ${position.y + 0.1} ${position.z}`); 
                     newObject.setAttribute('shadow', '');
                     newObject.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 4000; easing: linear');
                     
                     this.sceneEl.appendChild(newObject);
                     this.objectCount++;
-                    document.getElementById('status-message').textContent = `Objeto ${this.objectCount} colocado. ¡Siga creando!`;
+                    document.getElementById('status-message').textContent = `¡Objeto ${this.objectCount} colocado! Toque para añadir más.`;
                 } else {
-                    document.getElementById('status-message').textContent = '¡Necesita detectar una superficie para colocar el objeto!';
+                    document.getElementById('status-message').textContent = 'No se detecta superficie. Mueva el móvil lentamente.';
                 }
             }
-        });
-
-        // Lógica para iniciar la sesión AR al hacer clic en el botón
-        function startAR() {
-            const scene = document.getElementById('ar-scene');
-            const overlay = document.getElementById('ar-overlay');
-            
-            overlay.style.opacity = '0';
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                scene.enterAR();
-            }, 300); 
-        }
-
-        // Inicialización
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('start-ar-button').addEventListener('click', startAR);
         });
     </script>
 
@@ -226,10 +200,12 @@
         embedded 
         placement-handler
         renderer="logarithmicDepthBuffer: true; antialias: true" 
-        vr-mode-ui="enabled: false"
+        
+        <!-- Permitimos que A-Frame cree el botón UI nativo. -->
+        vr-mode-ui="enterARButton: #ar-button" 
         
         <!-- Configuración de WebXR: requerimos 'hit-test' y 'local' -->
-        webxr="requiredFeatures: hit-test, local; referenceSpaceType: local">
+        webxr="requiredFeatures: hit-test, local; optionalFeatures: dom-overlay; referenceSpaceType: local">
         
         <!-- Luces -->
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
@@ -262,22 +238,8 @@
         INTERFAZ DE USUARIO (UI)
         ============================================================
     -->
-
-    <div id="ar-overlay" class="transition duration-300 ease-in-out">
-        <div class="p-6 max-w-sm bg-white rounded-xl shadow-2xl space-y-4 transform scale-100 md:scale-110">
-            <h1 class="text-2xl font-bold text-gray-900">Iniciar AR (Fix Pura WebXR)</h1>
-            <p class="text-gray-600">Se ha implementado la lógica de Hit Test directamente con la API nativa de WebXR (similar a tu código exitoso).</p>
-            <p class="text-sm text-red-500 font-semibold">Mueva el móvil lentamente para escanear el entorno. El cursor verde debería aparecer en las superficies.</p>
-            <button 
-                id="start-ar-button" 
-                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg transform hover:scale-105">
-                INICIAR REALIDAD AUMENTADA
-            </button>
-        </div>
-    </div>
-
-    <div id="status-message" class="text-sm rounded-t-lg shadow-2xl">
-        Esperando inicio de AR...
+    <div id="status-message">
+        Cargando...
     </div>
 
 </body>
