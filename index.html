@@ -51,14 +51,12 @@
         a-scene {
             height: 100vh;
             width: 100vw;
-            /* Oculta los botones de A-Frame por defecto para usar nuestra UI */
             --aframe-scene-button-display: none; 
         }
 
         /* Estilo para el cursor visual */
         #ar-cursor-visual {
             opacity: 0.8;
-            /* La animación da un feedback visual de que está "vivo" */
             animation: pulse 1.5s infinite alternate;
         }
 
@@ -91,15 +89,16 @@
                         this.arModeActive = true;
                         this.statusEl.textContent = 'Mueva el móvil para escanear y encontrar superficies...';
 
-                        // 2. ATENCIÓN: Usamos el evento 'select' de WebXR para la interacción. 
-                        // Es el equivalente al 'onSelect' del código puro de WebXR que compartiste.
+                        // Usamos el evento 'select' de WebXR para la interacción (toque/clic)
                         this.sceneEl.addEventListener('select', this.placeObject.bind(this)); 
                         console.log('DEBUG: Listener "select" (WebXR) adjuntado a la escena.');
                     }
                 });
                 
-                // 3. Escuchar los eventos de 'ar-hit-test' para actualizar el estado del cursor
+                // 2. Escuchar los eventos de 'ar-hit-test' para actualizar el estado del cursor
                 this.cursorEl.addEventListener('ar-hit-test-update', (evt) => {
+                    console.log('DEBUG: Evento ar-hit-test-update disparado. Éxito:', evt.detail.successful);
+                    
                     // Si el hit-test fue exitoso, el cursor es visible y podemos colocar
                     if (evt.detail.successful) {
                         this.statusEl.textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar.';
@@ -111,14 +110,13 @@
 
             // Función para colocar el objeto 3D
             placeObject: function(evt) {
-                // Prevenir colocación si no estamos en modo AR
                 if (!this.arModeActive) return;
 
                 // Verificamos si el cursor visual está visible (indicador de hit-test exitoso)
                 const isCursorVisible = this.cursorEl.getAttribute('visible');
 
                 if (isCursorVisible) {
-                    // Obtenemos la posición actual del cursor visual (actualizada por ar-hit-test)
+                    // Obtenemos la posición actual del cursor visual
                     const position = this.cursorEl.object3D.position;
                     
                     const newObject = document.createElement('a-entity');
@@ -173,8 +171,8 @@
         renderer="logarithmicDepthBuffer: true; antialias: true" 
         vr-mode-ui="enabled: false"
         
-        <!-- Configuración de WebXR: Mínima y robusta -->
-        webxr="requiredFeatures: hit-test, local-floor; referenceSpaceType: local-floor">
+        <!-- FIX CLAVE: Cambiamos de 'local-floor' a 'local' para un espacio de referencia más general y compatible. -->
+        webxr="requiredFeatures: hit-test, local; referenceSpaceType: local">
         
         <!-- Luces: Imprescindible para ver objetos -->
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
@@ -185,7 +183,7 @@
         </a-camera>
         
         <!-- 
-            CURSOR VISUAL (Entidad independiente, NO hija de la cámara)
+            CURSOR VISUAL (Entidad independiente)
             El componente ar-hit-test lo posiciona automáticamente en el mundo. 
         -->
         <a-entity 
@@ -196,7 +194,7 @@
             visible="false"
             
             <!-- Componente clave: Realiza el hit-test y actualiza la posición del cursor en el mundo -->
-            ar-hit-test="doHitTest: true; targetEl: #ar-cursor-visual; type: plane">
+            ar-hit-test="doHitTest: true; targetEl: #ar-cursor-visual">
         </a-entity>
 
     </a-scene>
@@ -210,8 +208,8 @@
     <div id="ar-overlay" class="transition duration-300 ease-in-out">
         <div class="p-6 max-w-sm bg-white rounded-xl shadow-2xl space-y-4 transform scale-100 md:scale-110">
             <h1 class="text-2xl font-bold text-gray-900">Iniciar AR</h1>
-            <p class="text-gray-600">Sistema optimizado usando el evento `select` de WebXR para mayor estabilidad en móviles.</p>
-            <p class="text-sm text-red-500 font-semibold">Mueva el móvil lentamente para escanear el suelo. Cuando vea el cursor verde, toque la pantalla para colocar un objeto.</p>
+            <p class="text-gray-600">Sistema optimizado con el espacio de referencia `local` para mejor compatibilidad con dispositivos.</p>
+            <p class="text-sm text-red-500 font-semibold">Mueva el móvil lentamente para escanear el entorno. Cuando vea el cursor verde, toque la pantalla para colocar un objeto.</p>
             <button 
                 id="start-ar-button" 
                 class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition duration-300 shadow-lg transform hover:scale-105">
