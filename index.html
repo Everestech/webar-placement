@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Solución Three.js Pura y Robusta</title>
+    <title>WebAR: Solución Three.js Pura y Táctil</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -132,6 +132,9 @@
         }
 
         function onWindowResize() {
+            // Evitar cambiar el tamaño del renderizador si la sesión XR está activa (resuelve la advertencia de la consola)
+            if (xrSession) return;
+            
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -146,7 +149,6 @@
 
             try {
                 // Configurar el renderizador para usar el espacio de referencia más estable para colocación
-                // Usamos 'local-floor' que es más común que solo 'local' para placement
                 renderer.xr.setReferenceSpaceType('local-floor'); 
                 
                 // Solicitud de sesión inmersiva de AR
@@ -157,7 +159,7 @@
                 // Configurar el renderizador con la sesión (Three.js se encarga de la cámara)
                 renderer.xr.setSession(xrSession);
                 
-                // Pedir el espacio de referencia (Three.js lo hará automáticamente, pero lo guardamos)
+                // Pedir el espacio de referencia
                 xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
 
                 // Necesitamos el espacio 'viewer' para originar el rayo del hit-test
@@ -172,8 +174,10 @@
                 // Iniciar el bucle de animación de WebXR
                 renderer.setAnimationLoop(onXRFrame);
 
-                // Agregar listener de click al canvas
-                renderer.domElement.addEventListener('click', placeObject);
+                // <<<<< CAMBIO CLAVE AQUÍ >>>>>
+                // Usar el evento WebXR 'select' para la interacción táctil en AR
+                xrSession.addEventListener('select', placeObject);
+                // <<<<< FIN CAMBIO CLAVE >>>>>
 
                 // Manejar el fin de la sesión
                 xrSession.addEventListener('end', onXRSessionEnd);
@@ -182,7 +186,6 @@
 
             } catch (e) {
                 console.error('ERROR al iniciar WebXR AR:', e);
-                // Si falla por NotSupportedError, informamos.
                 statusMessageEl.textContent = `Error AR: ${e.name} (${e.message}). Intente con un plano diferente.`;
             }
         }
@@ -190,8 +193,9 @@
         // --- 3. Bucle de Renderizado de WebXR ---
         function onXRFrame(time, frame) {
             // Error Guardrail: Asegurar que el hit test source existe antes de usarlo
-            if (!xrSession || !xrHitTestSource || !frame) {
-                renderer.render(scene, camera); // Renderiza la escena vacía si no hay AR
+            if (!xrSession || !xrHitTestSource || !frame || !xrRefSpace) {
+                // Si la sesión aún no está totalmente configurada o terminó.
+                renderer.render(scene, camera); 
                 return;
             }
 
@@ -202,6 +206,7 @@
                 reticle.visible = true;
                 statusMessageEl.textContent = 'Superficie detectada (cursor verde). Toque la pantalla para colocar el objeto.';
                 
+                // Usar el primer resultado del hit-test
                 const pose = hitTestResults[0].getPose(xrRefSpace);
                 
                 if (pose) {
@@ -217,14 +222,12 @@
             renderer.render(scene, camera);
         }
 
-        // --- 4. Colocación de Objetos (Llamada por el evento 'click') ---
+        // --- 4. Colocación de Objetos (Llamada por el evento 'select' de WebXR) ---
+        // Nota: Este manejador de eventos no necesita el evento del ratón/touch.
         function placeObject() {
+            // Verificamos si el retículo es visible (si hay una superficie detectada)
             if (!xrSession || !reticle.visible) {
-                if(xrSession) {
-                    statusMessageEl.textContent = 'No se puede colocar: no se detecta superficie.';
-                } else {
-                    statusMessageEl.textContent = 'Inicie AR primero.';
-                }
+                statusMessageEl.textContent = 'No se puede colocar: primero debe detectar una superficie.';
                 return;
             }
 
@@ -232,7 +235,6 @@
             
             // Objeto de ejemplo: una caja azul giratoria
             const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-            // Usamos MeshPhongMaterial para que interactúe con las luces
             const material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 }); 
             const newObject = new THREE.Mesh(geometry, material);
 
@@ -244,15 +246,14 @@
             
             scene.add(newObject);
             objectCount++;
-            statusMessageEl.textContent = `¡Objeto ${objectCount} colocado! Toque para añadir más.`;
+            statusMessageEl.textContent = `¡Objeto ${objectCount} colocado! Toque la pantalla para añadir más.`;
         }
         
         // --- 5. Bucle de Animación Global (para los objetos colocados) ---
         function animateObjects() {
             requestAnimationFrame(animateObjects);
             
-            // Si hay una sesión AR activa, el render loop lo maneja Three.js. 
-            // Este bucle solo es para las animaciones internas (rotación de objetos).
+            // Rotar todos los objetos que tengan userData.isAnimated = true
             scene.children.forEach(obj => {
                 if (obj.userData.isAnimated) {
                     obj.rotation.y += obj.userData.rotationSpeed;
@@ -268,7 +269,10 @@
             xrHitTestSource = null;
             renderer.setAnimationLoop(null); 
             
-            renderer.domElement.removeEventListener('click', placeObject);
+            // Desvincular el evento select
+            if (xrSession) {
+                xrSession.removeEventListener('select', placeObject);
+            }
             
             reticle.visible = false;
             document.getElementById('start-overlay').style.display = 'flex';
