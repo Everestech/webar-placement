@@ -35,7 +35,6 @@
         a-scene {
             height: 100vh;
             width: 100vw;
-            /* Permitimos que A-Frame muestre su propio botón de entrada AR/VR */
         }
         #ar-cursor-visual {
             opacity: 0.8;
@@ -147,14 +146,14 @@
                 this.sceneEl.addEventListener('click', this.placeObject.bind(this));
                 
                 // Inicializar mensaje de estado
-                document.getElementById('status-message').textContent = 'Presione el botón AR (abajo a la derecha) para iniciar.';
+                document.getElementById('status-message').textContent = 'Listo para AR. Busque el ícono cuadrado en la esquina inferior derecha.';
 
                 // Mostrar advertencia si no hay soporte AR en el navegador
                 this.sceneEl.addEventListener('compatible-webxr', (evt) => {
                     if (evt.detail.immersiveAr) {
-                         document.getElementById('status-message').textContent = 'Listo. Presione el botón AR (icono cuadrado) para iniciar.';
+                         document.getElementById('status-message').textContent = 'Listo para AR. Busque el ícono cuadrado en la esquina inferior derecha.';
                     } else {
-                         document.getElementById('status-message').textContent = 'ADVERTENCIA: Su navegador/dispositivo no soporta WebXR Immersive AR.';
+                         document.getElementById('status-message').textContent = 'ADVERTENCIA: Su navegador/dispositivo no soporta WebXR Immersive AR. Necesita un móvil compatible.';
                     }
                 });
             },
@@ -162,7 +161,7 @@
             placeObject: function() {
                 // Solo colocar si estamos en modo AR
                 if (!this.sceneEl.is('ar-mode')) {
-                    document.getElementById('status-message').textContent = '¡Debe entrar en modo AR primero! Use el botón de abajo a la derecha.';
+                    document.getElementById('status-message').textContent = '¡Debe entrar en modo AR primero! Use el botón abajo a la derecha.';
                     return;
                 }
                 
@@ -172,7 +171,7 @@
                     
                     const newObject = document.createElement('a-entity');
                     
-                    // Objeto de ejemplo
+                    // Objeto de ejemplo: una caja azul giratoria
                     newObject.setAttribute('geometry', 'primitive: box; height: 0.2; width: 0.2; depth: 0.2');
                     newObject.setAttribute('material', 'color: #3b82f6; opacity: 0.9');
                     // Colocamos el objeto justo encima del cursor
@@ -201,11 +200,11 @@
         placement-handler
         renderer="logarithmicDepthBuffer: true; antialias: true" 
         
-        <!-- Permitimos que A-Frame cree el botón UI nativo. -->
-        vr-mode-ui="enterARButton: #ar-button" 
+        <!-- CORRECCIÓN: Habilitar el UI y dejar que A-Frame use su botón predeterminado. -->
+        vr-mode-ui="enabled: true" 
         
         <!-- Configuración de WebXR: requerimos 'hit-test' y 'local' -->
-        webxr="requiredFeatures: hit-test, local; optionalFeatures: dom-overlay; referenceSpaceType: local">
+        webxr="requiredFeatures: hit-test, local; referenceSpaceType: local">
         
         <!-- Luces -->
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
