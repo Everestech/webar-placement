@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAR: Seguimiento de Imagen (Image Tracking)</title>
+    
+    <!-- Tailwind CSS para estilos de UI (Solo para desarrollo) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js para renderizado 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- GLTFLoader para cargar el modelo 3D -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <!-- Model Viewer para iOS Quick Look y Fallback -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/1.12.0/model-viewer.min.js"></script>
+
+    <style>
+        /* General styles and UI */
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; height: 100vh; width: 100vw; overflow: hidden; }
+        
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Overlay for the start button */
+        #start-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* Status message at the bottom */
+        #status-message {
+            z-index: 1000;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 0.75rem;
+            text-align: center;
+            font-size: 0.875rem;
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+        }
+
+        /* Loading spinner style */
+        .loader {
+            border: 4px solid #f3f3f3; 
+            border-top: 4px solid #3b82f6; 
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 overflow-hidden">
+
+    <!-- Mensaje de estado -->
+    <div id="status-message">
+        Cargando WebAR...
+    </div>
+
+    <!-- Overlay de inicio con botones de detección dinámica -->
+    <div id="start-overlay">
+        <h1 class="text-2xl font-bold text-white mb-6">AR: Colocación sobre Foto</h1>
+        <p class="text-gray-300 mb-6 text-sm max-w-sm">
+            Para iniciar, **debes tener impresa la imagen objetivo** y colocarla en una superficie plana. La imagen es el logo de la NASA 'Worm' (15cm x 15cm).
+        </p>
+        
+        <!-- Botón para Android/WebXR Image Tracking -->
+        <button 
+            id="ar-button-android"
+            onclick="initAR()"
+            class="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105 mb-4"
+        >
+            INICIAR AR (Seguimiento de Imagen)
+        </button>
+
+        <!-- Model Viewer para iOS Quick Look (Image Tracking no está soportado uniformemente en Quick Look) -->
+        <model-viewer 
+            src="https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb" 
+            alt="Modelo de Neil Armstrong" 
+            ar
+            ar-modes="webxr quick-look scene-viewer"
+            ar-placement="floor"
+            camera-controls
+            shadow-intensity="1"
+            style="width: 0; height: 0; opacity: 0;"
+            id="model-viewer-ios"
+        >
+        </model-viewer>
+        
+        <button 
+            id="ar-button-ios"
+            onclick="document.getElementById('model-viewer-ios').activateAR()"
+            class="hidden px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105"
+        >
+            INICIAR AR (Quick Look - Fallback)
+        </button>
+
+        <p class="mt-4 text-gray-300 text-sm" id="platform-info">Detectando plataforma...</p>
+        
+        <!-- URL de la imagen que el usuario debe imprimir -->
+        <p class="mt-4 text-gray-400 text-xs">
+            Imagen objetivo: 
+            <a href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_worm_logo.svg/320px-NASA_worm_logo.svg.png" target="_blank" class="text-blue-400 hover:text-blue-300">
+                Logo NASA 'Worm'
+            </a> (Imprimir a 15cm de ancho)
+        </p>
+    </div>
+
+    <!-- 
+        ============================================================
+        Script: Lógica de WebXR Image Tracking
+        ============================================================
+    -->
+    <script>
+        // --- CONSTANTS ---
+        const MODEL_URL = "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb";
+        const TARGET_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_worm_logo.svg/320px-NASA_worm_logo.svg.png";
+        // Physical size of the printed image in meters (15 cm)
+        const TARGET_IMAGE_SIZE_METERS = 0.15; 
+        
+        // Three.js and WebXR Variables
+        let scene, camera, renderer;
+        let xrSession = null;
+        let xrRefSpace = null;
+        let statusMessageEl;
+        let armstrongModel = null;
+        let targetImageBitmap = null; // Stores the loaded image data
+
+        // An object to hold the single instance of the model once placed
+        let placedModel = null; 
+
+        // --- Platform Detection ---
+        function isIOS() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            return /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+        }
+
+        // --- 0. Load the GLTF Model and Target Image ---
+        async function loadAssets() {
+            statusMessageEl.innerHTML = '<span class="loader"></span> Cargando modelo 3D y foto objetivo...';
+            
+            // 1. Load GLTF Model (Neil Armstrong)
+            const modelPromise = new Promise((resolve, reject) => {
+                const loader = new THREE.GLTFLoader();
+                loader.load(MODEL_URL, (gltf) => {
+                    armstrongModel = gltf.scene;
+                    // Scale the model down significantly
+                    armstrongModel.scale.set(0.1, 0.1, 0.1); 
+                    // Set it initially invisible
+                    armstrongModel.visible = false; 
+                    armstrongModel.traverse((node) => {
+                        if (node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                        }
+                    });
+                    resolve();
+                }, undefined, reject);
+            });
+
+            // 2. Load Target Image as ImageBitmap for WebXR
+            const imagePromise = fetch(TARGET_IMAGE_URL)
+                .then(response => response.blob())
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    targetImageBitmap = bitmap;
+                })
+                .catch(error => {
+                    console.error('Error loading target image:', error);
+                    throw new Error('No se pudo cargar la imagen objetivo.');
+                });
+
+            try {
+                await Promise.all([modelPromise, imagePromise]);
+                statusMessageEl.textContent = 'Activos listos. Presione INICIAR AR.';
+                document.getElementById('ar-button-android').disabled = false;
+            } catch (e) {
+                console.error(e);
+                statusMessageEl.textContent = `ERROR: ${e.message}. Verifique la URL de la imagen y el modelo.`;
+                document.getElementById('ar-button-android').disabled = true;
+            }
+        }
+
+        // --- 1. Three.js Initialization and Platform Check ---
+        function initThree() {
+            const isApple = isIOS();
+            statusMessageEl = document.getElementById('status-message');
+            const androidButton = document.getElementById('ar-button-android');
+            const iosButton = document.getElementById('ar-button-ios');
+            const platformInfo = document.getElementById('platform-info');
+
+            androidButton.disabled = true; // Disable until assets are loaded
+
+            if (isApple) {
+                // UI for iOS (Quick Look) - Image Tracking not used here as Quick Look does not support it
+                androidButton.style.display = 'none';
+                iosButton.classList.remove('hidden');
+                statusMessageEl.textContent = 'Usando Quick Look de iOS (solo detección de plano).';
+                platformInfo.textContent = 'Plataforma: iOS. Se recomienda usar la detección de plano.';
+                return;
+            }
+
+            // UI for Android/WebXR
+            platformInfo.textContent = 'Plataforma: Android/Otro. Usando WebXR Image Tracking.';
+            iosButton.style.display = 'none'; 
+            
+            // Initialization of Three.js
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.xr.enabled = true; // Enable WebXR
+            document.body.appendChild(renderer.domElement);
+            
+            // Lighting
+            const light = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(light);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            directionalLight.position.set(0, 5, 2);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            renderer.shadowMap.enabled = true; 
+            
+            // Add the model to the scene once (it will be repositioned later)
+            scene.add(armstrongModel);
+
+            window.addEventListener('resize', onWindowResize, false);
+            
+            // Start loading assets
+            loadAssets();
+        }
+
+        function onWindowResize() {
+            if (xrSession || isIOS()) return; 
+            
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- 2. Initiation of WebXR (Image Tracking) ---
+        async function initAR() {
+            if (isIOS() || !armstrongModel || !targetImageBitmap) {
+                statusMessageEl.textContent = 'Esperando la carga de activos...';
+                return; 
+            }
+
+            if (!navigator.xr) {
+                statusMessageEl.textContent = 'WebXR no soportado en este dispositivo.';
+                return;
+            }
+
+            // Configure the image to track
+            const trackableImage = {
+                image: targetImageBitmap,
+                // The size of the physical image in meters (0.15m x 0.15m)
+                measuredWidthInMeters: TARGET_IMAGE_SIZE_METERS, 
+            };
+
+            try {
+                // Request the image-tracking feature with the target image
+                xrSession = await navigator.xr.requestSession('immersive-ar', { 
+                    requiredFeatures: ['local'], // Using 'local' for stability
+                    optionalFeatures: ['dom-overlay'], // Optional if a specific UI is needed
+                    trackedImages: [trackableImage] // IMPORTANT: Pass the image configuration
+                });
+
+                renderer.xr.setSession(xrSession);
+                // We use 'local' reference space for a non-moving environment relative to the device's starting position
+                xrRefSpace = await xrSession.requestReferenceSpace('local'); 
+                
+                document.getElementById('start-overlay').style.display = 'none';
+                
+                // START THE WEBXR ANIMATION LOOP
+                renderer.setAnimationLoop(onXRFrame); 
+                
+                xrSession.addEventListener('end', onXRSessionEnd);
+
+                statusMessageEl.textContent = 'Busque la imagen impresa del logo de la NASA 'Worm'...';
+
+            } catch (e) {
+                console.error('ERROR al iniciar WebXR AR (Image Tracking):', e);
+                statusMessageEl.textContent = `Error AR (Image Tracking): ${e.name}. El dispositivo no soporta el seguimiento de imágenes.`;
+            }
+        }
+
+        // --- 3. WebXR Rendering Loop (Image Tracking) ---
+        function onXRFrame(time, frame) {
+            
+            // --- A. Logic for Image Tracking ---
+            // Get the list of images currently being tracked
+            const trackables = frame.getTrackedImage(xrRefSpace);
+
+            let isImageTracked = false;
+            
+            if (trackables && trackables.length > 0) {
+                const trackedImage = trackables[0]; // We only have one image to track
+                
+                if (trackedImage.getIsTracked()) {
+                    isImageTracked = true;
+                    
+                    // Get the position and orientation of the tracked image
+                    const pose = frame.getPose(trackedImage.getAnchor().anchorSpace, xrRefSpace);
+                    
+                    if (pose) {
+                        // Create a matrix from the pose and apply it to the model
+                        const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
+                        
+                        // Apply the matrix to the model
+                        armstrongModel.applyMatrix4(matrix);
+                        armstrongModel.visible = true;
+                        
+                        // Adjust model position relative to the image center (e.g., lift it up)
+                        // This moves the model half of its height above the image plane
+                        armstrongModel.position.y += armstrongModel.scale.y * 0.5; 
+                        
+                        statusMessageEl.textContent = '¡IMAGEN DETECTADA! Moviendo el modelo a la posición.';
+                    }
+                }
+            }
+
+            // If the image is not currently tracked, hide the model
+            if (!isImageTracked) {
+                if (armstrongModel) {
+                    armstrongModel.visible = false;
+                    statusMessageEl.textContent = 'Busque la imagen impresa...';
+                }
+            }
+            
+            // --- B. Rendering
+            renderer.render(scene, camera);
+        }
+
+        // --- 4. Session End Handler ---
+        function onXRSessionEnd() {
+            // Stop the WebXR animation loop
+            renderer.setAnimationLoop(null); 
+            
+            xrSession = null;
+            xrRefSpace = null;
+            
+            if (armstrongModel) {
+                armstrongModel.visible = false;
+            }
+
+            document.getElementById('start-overlay').style.display = 'flex';
+            statusMessageEl.textContent = 'Sesión AR terminada. Presione INICIAR AR para comenzar de nuevo.';
+        }
+
+        // Start on window load
+        window.onload = function() {
+            initThree(); 
+        };
+    </script>
+
+</body>
+</html>
