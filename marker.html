@@ -88,7 +88,7 @@
     <div id="start-overlay">
         <h1 class="text-2xl font-bold text-white mb-6">AR: Colocación sobre Foto</h1>
         <p class="text-gray-300 mb-6 text-sm max-w-sm">
-            Para iniciar, **debes tener impresa la imagen objetivo** y colocarla en una superficie plana. La imagen es el logo de la NASA 'Worm' (15cm x 15cm).
+            Para iniciar, **debes tener impresa la imagen objetivo** (un cuadrado negro con el texto "AR TARGET") y colocarla en una superficie plana.
         </p>
         
         <!-- Botón para Android/WebXR Image Tracking -->
@@ -100,7 +100,7 @@
             INICIAR AR (Seguimiento de Imagen)
         </button>
 
-        <!-- Model Viewer para iOS Quick Look (Image Tracking no está soportado uniformemente en Quick Look) -->
+        <!-- Model Viewer para iOS Quick Look y Fallback -->
         <model-viewer 
             src="https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb" 
             alt="Modelo de Neil Armstrong" 
@@ -124,11 +124,11 @@
 
         <p class="mt-4 text-gray-300 text-sm" id="platform-info">Detectando plataforma...</p>
         
-        <!-- URL de la imagen que el usuario debe imprimir -->
+        <!-- URL de la imagen que el usuario debe imprimir (AHORA ESTABLE) -->
         <p class="mt-4 text-gray-400 text-xs">
             Imagen objetivo: 
-            <a href="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_worm_logo.svg/320px-NASA_worm_logo.svg.png" target="_blank" class="text-blue-400 hover:text-blue-300">
-                Logo NASA 'Worm'
+            <a href="https://placehold.co/500x500/000000/FFFFFF/png?text=AR+TARGET" target="_blank" class="text-blue-400 hover:text-blue-300">
+                Placeholder AR TARGET (¡Imprimir!)
             </a> (Imprimir a 15cm de ancho)
         </p>
     </div>
@@ -141,7 +141,8 @@
     <script>
         // --- CONSTANTS ---
         const MODEL_URL = "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb";
-        const TARGET_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e5/NASA_worm_logo.svg/320px-NASA_worm_logo.svg.png";
+        // *** URL ACTUALIZADA Y ESTABLE ***
+        const TARGET_IMAGE_URL = "https://placehold.co/500x500/000000/FFFFFF/png?text=AR+TARGET"; 
         // Physical size of the printed image in meters (15 cm)
         const TARGET_IMAGE_SIZE_METERS = 0.15; 
         
@@ -194,7 +195,7 @@
                 })
                 .catch(error => {
                     console.error('Error loading target image:', error);
-                    throw new Error('No se pudo cargar la imagen objetivo.');
+                    throw new Error('No se pudo cargar la imagen objetivo. Revise la URL o permisos.');
                 });
 
             try {
@@ -203,7 +204,7 @@
                 document.getElementById('ar-button-android').disabled = false;
             } catch (e) {
                 console.error(e);
-                statusMessageEl.textContent = `ERROR: ${e.message}. Verifique la URL de la imagen y el modelo.`;
+                statusMessageEl.textContent = `ERROR: ${e.message}. El seguimiento de imágenes requiere que la foto sea cargada correctamente.`;
                 document.getElementById('ar-button-android').disabled = true;
             }
         }
@@ -305,7 +306,7 @@
                 
                 xrSession.addEventListener('end', onXRSessionEnd);
 
-                statusMessageEl.textContent = 'Busque la imagen impresa del logo de la NASA 'Worm'...';
+                statusMessageEl.textContent = 'Busque la imagen impresa "AR TARGET"...';
 
             } catch (e) {
                 console.error('ERROR al iniciar WebXR AR (Image Tracking):', e);
@@ -317,30 +318,26 @@
         function onXRFrame(time, frame) {
             
             // --- A. Logic for Image Tracking ---
-            // Get the list of images currently being tracked
-            const trackables = frame.getTrackedImage(xrRefSpace);
-
+            const trackedImageSet = frame.getTrackedImageSet ? frame.getTrackedImageSet() : (frame.getTrackedImage ? frame.getTrackedImage(xrRefSpace) : []);
+            
             let isImageTracked = false;
             
-            if (trackables && trackables.length > 0) {
-                const trackedImage = trackables[0]; // We only have one image to track
+            if (trackedImageSet && trackedImageSet.length > 0) {
+                // We only have one image defined
+                const trackedImage = trackedImageSet[0]; 
                 
                 if (trackedImage.getIsTracked()) {
                     isImageTracked = true;
                     
-                    // Get the position and orientation of the tracked image
                     const pose = frame.getPose(trackedImage.getAnchor().anchorSpace, xrRefSpace);
                     
                     if (pose) {
-                        // Create a matrix from the pose and apply it to the model
                         const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
                         
-                        // Apply the matrix to the model
                         armstrongModel.applyMatrix4(matrix);
                         armstrongModel.visible = true;
                         
-                        // Adjust model position relative to the image center (e.g., lift it up)
-                        // This moves the model half of its height above the image plane
+                        // Lift the model half its height above the image plane
                         armstrongModel.position.y += armstrongModel.scale.y * 0.5; 
                         
                         statusMessageEl.textContent = '¡IMAGEN DETECTADA! Moviendo el modelo a la posición.';
@@ -352,7 +349,7 @@
             if (!isImageTracked) {
                 if (armstrongModel) {
                     armstrongModel.visible = false;
-                    statusMessageEl.textContent = 'Busque la imagen impresa...';
+                    statusMessageEl.textContent = 'Busque la imagen impresa "AR TARGET"...';
                 }
             }
             
@@ -362,7 +359,6 @@
 
         // --- 4. Session End Handler ---
         function onXRSessionEnd() {
-            // Stop the WebXR animation loop
             renderer.setAnimationLoop(null); 
             
             xrSession = null;
