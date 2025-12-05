@@ -18,7 +18,7 @@
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/1.12.0/model-viewer.min.js"></script>
 
     <style>
-        /* General styles and UI */
+        /* Estilos generales y UI */
         body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; height: 100vh; width: 100vw; overflow: hidden; }
         
         canvas {
@@ -27,7 +27,7 @@
             height: 100%;
         }
 
-        /* Overlay for the start button */
+        /* Overlay para el botón de inicio */
         #start-overlay {
             position: fixed;
             top: 0;
@@ -44,7 +44,7 @@
             padding: 20px;
         }
 
-        /* Status message at the bottom */
+        /* Mensaje de estado en la parte inferior */
         #status-message {
             z-index: 1000;
             position: fixed;
@@ -59,7 +59,7 @@
             border-top-right-radius: 0.5rem;
         }
 
-        /* Loading spinner style */
+        /* Estilo del spinner de carga */
         .loader {
             border: 4px solid #f3f3f3; 
             border-top: 4px solid #3b82f6; 
@@ -128,8 +128,8 @@
         <p class="mt-4 text-gray-400 text-xs">
             Imagen objetivo: 
             <a href="https://placehold.co/500x500/000000/FFFFFF/png?text=AR+TARGET" target="_blank" class="text-blue-400 hover:text-blue-300">
-                Placeholder AR TARGET (¡Imprimir!)
-            </a> (Imprimir a 15cm de ancho)
+                Placeholder AR TARGET (¡Imprimir a 15cm!)
+            </a>
         </p>
     </div>
 
@@ -139,42 +139,35 @@
         ============================================================
     -->
     <script>
-        // --- CONSTANTS ---
+        // --- CONSTANTES ---
         const MODEL_URL = "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb";
-        // *** URL ACTUALIZADA Y ESTABLE ***
         const TARGET_IMAGE_URL = "https://placehold.co/500x500/000000/FFFFFF/png?text=AR+TARGET"; 
-        // Physical size of the printed image in meters (15 cm)
-        const TARGET_IMAGE_SIZE_METERS = 0.15; 
+        const TARGET_IMAGE_SIZE_METERS = 0.15; // 15 cm
         
-        // Three.js and WebXR Variables
+        // Variables de Three.js y WebXR
         let scene, camera, renderer;
         let xrSession = null;
         let xrRefSpace = null;
         let statusMessageEl;
         let armstrongModel = null;
-        let targetImageBitmap = null; // Stores the loaded image data
+        let targetImageBitmap = null; 
 
-        // An object to hold the single instance of the model once placed
-        let placedModel = null; 
-
-        // --- Platform Detection ---
+        // --- Detección de Plataforma ---
         function isIOS() {
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             return /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
         }
 
-        // --- 0. Load the GLTF Model and Target Image ---
+        // --- 0. Cargar el Modelo GLTF y la Imagen Objetivo ---
         async function loadAssets() {
             statusMessageEl.innerHTML = '<span class="loader"></span> Cargando modelo 3D y foto objetivo...';
             
-            // 1. Load GLTF Model (Neil Armstrong)
+            // 1. Cargar el Modelo GLTF
             const modelPromise = new Promise((resolve, reject) => {
                 const loader = new THREE.GLTFLoader();
                 loader.load(MODEL_URL, (gltf) => {
                     armstrongModel = gltf.scene;
-                    // Scale the model down significantly
                     armstrongModel.scale.set(0.1, 0.1, 0.1); 
-                    // Set it initially invisible
                     armstrongModel.visible = false; 
                     armstrongModel.traverse((node) => {
                         if (node.isMesh) {
@@ -186,16 +179,19 @@
                 }, undefined, reject);
             });
 
-            // 2. Load Target Image as ImageBitmap for WebXR
+            // 2. Cargar Imagen Objetivo como ImageBitmap
             const imagePromise = fetch(TARGET_IMAGE_URL)
-                .then(response => response.blob())
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.blob();
+                })
                 .then(blob => createImageBitmap(blob))
                 .then(bitmap => {
                     targetImageBitmap = bitmap;
                 })
                 .catch(error => {
-                    console.error('Error loading target image:', error);
-                    throw new Error('No se pudo cargar la imagen objetivo. Revise la URL o permisos.');
+                    console.error('Error cargando imagen objetivo:', error);
+                    throw new Error(`[Fallo de RED/Carga] No se pudo cargar la imagen objetivo. Error: ${error.message}`);
                 });
 
             try {
@@ -204,12 +200,12 @@
                 document.getElementById('ar-button-android').disabled = false;
             } catch (e) {
                 console.error(e);
-                statusMessageEl.textContent = `ERROR: ${e.message}. El seguimiento de imágenes requiere que la foto sea cargada correctamente.`;
+                statusMessageEl.textContent = `[ERROR DE ACTIVOS] ${e.message}. El seguimiento de imágenes requiere que la foto sea cargada correctamente.`;
                 document.getElementById('ar-button-android').disabled = true;
             }
         }
 
-        // --- 1. Three.js Initialization and Platform Check ---
+        // --- 1. Inicialización de Three.js y Verificación de Plataforma ---
         function initThree() {
             const isApple = isIOS();
             statusMessageEl = document.getElementById('status-message');
@@ -217,32 +213,33 @@
             const iosButton = document.getElementById('ar-button-ios');
             const platformInfo = document.getElementById('platform-info');
 
-            androidButton.disabled = true; // Disable until assets are loaded
+            androidButton.disabled = true; 
 
             if (isApple) {
-                // UI for iOS (Quick Look) - Image Tracking not used here as Quick Look does not support it
+                // Configuración para iOS (Quick Look)
                 androidButton.style.display = 'none';
                 iosButton.classList.remove('hidden');
-                statusMessageEl.textContent = 'Usando Quick Look de iOS (solo detección de plano).';
-                platformInfo.textContent = 'Plataforma: iOS. Se recomienda usar la detección de plano.';
+                statusMessageEl.textContent = 'Dispositivo iOS detectado. Por favor, use el botón verde "Quick Look - Fallback".';
+                platformInfo.textContent = 'Plataforma: iOS. WebXR Image Tracking no soportado. Usando Fallback.';
+                // No necesitamos cargar Three.js si usamos solo Model Viewer para iOS
                 return;
             }
 
-            // UI for Android/WebXR
+            // Configuración para Android/WebXR
             platformInfo.textContent = 'Plataforma: Android/Otro. Usando WebXR Image Tracking.';
             iosButton.style.display = 'none'; 
             
-            // Initialization of Three.js
+            // Inicialización de Three.js
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.outputEncoding = THREE.sRGBEncoding;
-            renderer.xr.enabled = true; // Enable WebXR
+            renderer.xr.enabled = true; 
             document.body.appendChild(renderer.domElement);
             
-            // Lighting
+            // Iluminación
             const light = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(light);
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -251,12 +248,11 @@
             scene.add(directionalLight);
             renderer.shadowMap.enabled = true; 
             
-            // Add the model to the scene once (it will be repositioned later)
             scene.add(armstrongModel);
 
             window.addEventListener('resize', onWindowResize, false);
             
-            // Start loading assets
+            // Iniciar la carga de activos
             loadAssets();
         }
 
@@ -268,62 +264,81 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- 2. Initiation of WebXR (Image Tracking) ---
+        // --- 2. Iniciación de WebXR (Image Tracking) ---
         async function initAR() {
-            if (isIOS() || !armstrongModel || !targetImageBitmap) {
+            if (isIOS()) {
+                // En iOS, el botón de Android no debe estar disponible, pero si lo presionan, redirigir al fallback.
+                document.getElementById('model-viewer-ios').activateAR();
+                return;
+            }
+            if (!armstrongModel || !targetImageBitmap) {
                 statusMessageEl.textContent = 'Esperando la carga de activos...';
                 return; 
             }
 
             if (!navigator.xr) {
-                statusMessageEl.textContent = 'WebXR no soportado en este dispositivo.';
+                statusMessageEl.textContent = 'WebXR no soportado en este dispositivo/navegador. Intente actualizar Chrome.';
                 return;
             }
 
-            // Configure the image to track
+            // Verificación de disponibilidad de seguimiento de imágenes
+            const isSupported = await navigator.xr.isSessionSupported('immersive-ar', { 
+                requiredFeatures: ['local'],
+                trackedImages: [{ image: targetImageBitmap, measuredWidthInMeters: TARGET_IMAGE_SIZE_METERS }]
+            });
+            
+            if (!isSupported) {
+                 statusMessageEl.textContent = 'ERROR: Su dispositivo no soporta la característica de Seguimiento de Imagen (WebXR).';
+                 return;
+            }
+
+            // Configurar la imagen a rastrear
             const trackableImage = {
                 image: targetImageBitmap,
-                // The size of the physical image in meters (0.15m x 0.15m)
                 measuredWidthInMeters: TARGET_IMAGE_SIZE_METERS, 
             };
 
             try {
-                // Request the image-tracking feature with the target image
+                // Solicitar la sesión de AR
                 xrSession = await navigator.xr.requestSession('immersive-ar', { 
-                    requiredFeatures: ['local'], // Using 'local' for stability
-                    optionalFeatures: ['dom-overlay'], // Optional if a specific UI is needed
-                    trackedImages: [trackableImage] // IMPORTANT: Pass the image configuration
+                    requiredFeatures: ['local'],
+                    trackedImages: [trackableImage]
                 });
 
                 renderer.xr.setSession(xrSession);
-                // We use 'local' reference space for a non-moving environment relative to the device's starting position
                 xrRefSpace = await xrSession.requestReferenceSpace('local'); 
                 
                 document.getElementById('start-overlay').style.display = 'none';
                 
-                // START THE WEBXR ANIMATION LOOP
+                // INICIAR EL BUCLE DE ANIMACIÓN WEBXR
                 renderer.setAnimationLoop(onXRFrame); 
                 
                 xrSession.addEventListener('end', onXRSessionEnd);
 
-                statusMessageEl.textContent = 'Busque la imagen impresa "AR TARGET"...';
+                statusMessageEl.textContent = 'Cámara iniciada. Busque la imagen impresa "AR TARGET"...';
 
             } catch (e) {
                 console.error('ERROR al iniciar WebXR AR (Image Tracking):', e);
-                statusMessageEl.textContent = `Error AR (Image Tracking): ${e.name}. El dispositivo no soporta el seguimiento de imágenes.`;
+                // Proporciona un mensaje de error más específico para el usuario
+                let errorMessage = 'Fallo al iniciar AR: Revise permisos de cámara o compatibilidad.';
+                if (e.name === 'NotAllowedError') {
+                    errorMessage = 'ERROR DE PERMISOS: Debe permitir el acceso a la cámara para iniciar AR.';
+                } else if (e.name === 'SecurityError') {
+                    errorMessage = 'ERROR DE SEGURIDAD: La cámara no puede ser iniciada. Intente en un navegador diferente.';
+                }
+                statusMessageEl.textContent = errorMessage;
             }
         }
 
-        // --- 3. WebXR Rendering Loop (Image Tracking) ---
+        // --- 3. Bucle de Renderizado WebXR ---
         function onXRFrame(time, frame) {
             
-            // --- A. Logic for Image Tracking ---
+            // --- A. Lógica de Seguimiento de Imagen ---
             const trackedImageSet = frame.getTrackedImageSet ? frame.getTrackedImageSet() : (frame.getTrackedImage ? frame.getTrackedImage(xrRefSpace) : []);
             
             let isImageTracked = false;
             
             if (trackedImageSet && trackedImageSet.length > 0) {
-                // We only have one image defined
                 const trackedImage = trackedImageSet[0]; 
                 
                 if (trackedImage.getIsTracked()) {
@@ -337,7 +352,7 @@
                         armstrongModel.applyMatrix4(matrix);
                         armstrongModel.visible = true;
                         
-                        // Lift the model half its height above the image plane
+                        // Levanta el modelo la mitad de su altura
                         armstrongModel.position.y += armstrongModel.scale.y * 0.5; 
                         
                         statusMessageEl.textContent = '¡IMAGEN DETECTADA! Moviendo el modelo a la posición.';
@@ -345,19 +360,20 @@
                 }
             }
 
-            // If the image is not currently tracked, hide the model
+            // Ocultar el modelo si la imagen no está siendo rastreada
             if (!isImageTracked) {
                 if (armstrongModel) {
                     armstrongModel.visible = false;
-                    statusMessageEl.textContent = 'Busque la imagen impresa "AR TARGET"...';
+                    // Solo actualiza el mensaje si no hay un error específico en la consola
+                    statusMessageEl.textContent = 'Cámara iniciada. Busque la imagen impresa "AR TARGET"...';
                 }
             }
             
-            // --- B. Rendering
+            // --- B. Renderizado
             renderer.render(scene, camera);
         }
 
-        // --- 4. Session End Handler ---
+        // --- 4. Manejador de Finalización de Sesión ---
         function onXRSessionEnd() {
             renderer.setAnimationLoop(null); 
             
@@ -372,7 +388,7 @@
             statusMessageEl.textContent = 'Sesión AR terminada. Presione INICIAR AR para comenzar de nuevo.';
         }
 
-        // Start on window load
+        // Iniciar al cargar la ventana
         window.onload = function() {
             initThree(); 
         };
