@@ -11,21 +11,28 @@
     <!-- 
         1. A-Frame: Framework para crear escenas 3D declarativamente.
         2. AR.js: Librería de AR, integrada con A-Frame para reconocimiento de patrones.
-        Usamos enlaces de CDN altamente estables.
     -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
         /* Estilos generales */
-        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; overflow: hidden; background-color: black; }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: 'Inter', sans-serif; 
+            overflow: hidden; 
+            background-color: black;
+            /* CRÍTICO: Usar min-h-screen para mejor compatibilidad móvil que 100vh */
+            min-height: 100vh;
+        }
         
         a-scene {
             width: 100vw;
             height: 100vh;
         }
 
-        /* Overlay de inicio con botón único */
+        /* Overlay de inicio con botón único: Centrado seguro */
         #start-overlay {
             position: fixed;
             top: 0;
@@ -34,6 +41,7 @@
             height: 100%;
             background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
+            /* CRÍTICO: Flexbox para centrar en el viewport */
             display: flex;
             justify-content: center;
             align-items: center;
