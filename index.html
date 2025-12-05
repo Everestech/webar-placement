@@ -32,16 +32,25 @@
         
         /* 2. a-scene: Debe ocupar exactamente el mismo espacio que el body */
         a-scene {
-            position: fixed; /* Asegura que la escena está fija en la pantalla */
+            position: fixed; 
             top: 0; 
             left: 0;
             width: 100vw;
             height: calc(var(--vh, 1vh) * 100); 
         }
 
-        /* CRÍTICO: Forzar al elemento de video de la cámara, que AR.js inserta, a llenar el contenedor */
+        /* CORRECCIÓN CRÍTICA 1: Forzar al CANVAS (el renderizado 3D) a estar anclado y ser fullscreen */
+        a-scene .a-canvas {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* CORRECCIÓN CRÍTICA 2: Forzar al elemento de video de la cámara a llenar el contenedor */
         a-scene video {
-            object-fit: cover; /* Asegura que el video llene el espacio sin distorsión */
+            object-fit: cover !important; /* Asegura que el video llene el espacio sin distorsión */
             width: 100% !important;
             height: 100% !important;
             transform: none !important; /* Desactiva transformaciones que podrían descentrarlo */
@@ -56,7 +65,7 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: calc(var(--vh, 1vh) * 100); /* Utiliza la altura estable */
+            height: calc(var(--vh, 1vh) * 100); 
             background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
             
@@ -134,15 +143,15 @@
             smoothThreshold="0.5" 
             id="marker-barcode-6"
         >
-            <!-- Modelo 3D: Astronauta (Neil Armstrong) -->
+            <!-- CORRECCIÓN 3D: Aumento de la escala del modelo a 0.5 para que sea visible -->
             <a-entity 
                 gltf-model="url(https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb)"
-                scale="0.1 0.1 0.1" 
+                scale="0.5 0.5 0.5" 
                 rotation="0 0 0"
                 position="0 0 0.1" 
             ></a-entity>
 
-            <!-- Agregamos luces -->
+            <!-- Agregamos luces para que el modelo no se vea negro -->
             <a-light type="ambient" color="#FFF"></a-light>
             <a-light type="directional" position="0 1 0" color="#AAA" intensity="0.8"></a-light>
         </a-marker>
@@ -153,13 +162,10 @@
 
     <script>
         // --- Solución CRÍTICA para el problema de 100vh en móviles ---
-        // Calcula y establece la altura real del viewport (sin barras de navegación)
         function setVhProperty() {
             let vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
         }
-
-        // Ejecutar al cargar y al cambiar el tamaño de la ventana (incluida la rotación del dispositivo)
         setVhProperty();
         window.addEventListener('resize', setVhProperty);
         // -----------------------------------------------------------------
@@ -176,18 +182,18 @@
             sceneEl.style.display = 'block';
 
             statusMessage.textContent = 'Solicitando permisos de cámara...';
-            
+
             // 2. Escuchar el evento de inicialización de la cámara (propiedad de AR.js)
             sceneEl.addEventListener('arjs-video-loaded', function () {
-                // Al cargar el video, forzamos la propiedad vh de nuevo por si acaso hubo un pequeño retraso o cambio
-                setVhProperty();
+                setVhProperty(); // Doble verificación de la altura al cargar el video
                 statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de código de barras con el número 6!';
             });
             
             // 3. Escuchar la detección del marcador
             markerEl.addEventListener('markerFound', function() {
                 statusMessage.textContent = '¡MARCADOR 6 DETECTADO! Astronauta visible.';
-                statusMessage.style.backgroundColor = 'rgba(234, 179, 8, 0.9)'; // Amarillo
+                statusMessage.style.backgroundColor = 'rgba(10, 207, 151, 0.9)'; // Teal brillante
+                console.log("Marcador 6 detectado y modelo 3D debería ser visible.");
             });
 
             markerEl.addEventListener('markerLost', function() {
