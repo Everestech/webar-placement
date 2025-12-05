@@ -32,8 +32,22 @@
         
         /* 2. a-scene: Debe ocupar exactamente el mismo espacio que el body */
         a-scene {
+            position: fixed; /* Asegura que la escena está fija en la pantalla */
+            top: 0; 
+            left: 0;
             width: 100vw;
             height: calc(var(--vh, 1vh) * 100); 
+        }
+
+        /* CRÍTICO: Forzar al elemento de video de la cámara, que AR.js inserta, a llenar el contenedor */
+        a-scene video {
+            object-fit: cover; /* Asegura que el video llene el espacio sin distorsión */
+            width: 100% !important;
+            height: 100% !important;
+            transform: none !important; /* Desactiva transformaciones que podrían descentrarlo */
+            position: absolute !important; 
+            top: 0 !important;
+            left: 0 !important;
         }
 
         /* 3. Overlay de inicio: Centrado perfecto sobre el espacio fijo */
@@ -162,9 +176,11 @@
             sceneEl.style.display = 'block';
 
             statusMessage.textContent = 'Solicitando permisos de cámara...';
-
+            
             // 2. Escuchar el evento de inicialización de la cámara (propiedad de AR.js)
             sceneEl.addEventListener('arjs-video-loaded', function () {
+                // Al cargar el video, forzamos la propiedad vh de nuevo por si acaso hubo un pequeño retraso o cambio
+                setVhProperty();
                 statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de código de barras con el número 6!';
             });
             
