@@ -3,62 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Reconocimiento de Imagen (Prueba con 'pattern-artarget')</title>
+    <title>AR.js: Marcador de Código de Barras</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Three.js para renderizado 3D -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <!-- GLTFLoader para cargar el modelo 3D -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
-    <!-- JSARToolkit: Librería de AR basada en visión artificial -->
-    <script src="https://unpkg.com/jsartoolkit/js/artoolkit.min.js"></script>
+    <!-- 
+        1. A-Frame: Framework para crear escenas 3D declarativamente.
+        2. AR.js: Librería de AR, integrada con A-Frame para reconocimiento de patrones.
+        Usamos enlaces de CDN altamente estables.
+    -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        /* Estilos generales y UI */
-        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; height: 100vh; width: 100vw; overflow: hidden; background-color: black; }
+        /* Estilos generales */
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; overflow: hidden; background-color: black; }
         
-        /* Contenedor de la cámara (stream de video) */
-        #video-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-            z-index: 10; 
+        a-scene {
+            width: 100vw;
+            height: 100vh;
         }
 
-        /* El stream de video de la cámara */
-        #camera-feed {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        /* El canvas de Three.js se superpone al video */
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 20; /* Superior al video */
-            display: none; 
-        }
-
-        /* Overlay para el botón de inicio */
+        /* Overlay de inicio con botón único */
         #start-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
+            background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
             display: flex;
             justify-content: center;
@@ -74,263 +48,123 @@
             position: fixed;
             bottom: 0;
             width: 100%;
-            background-color: rgba(0, 0, 0, 0.85);
+            background-color: rgba(22, 163, 74, 0.9); /* Green-600 */
             color: white;
-            padding: 0.75rem;
+            padding: 1rem;
             text-align: center;
-            font-size: 0.875rem;
-            border-top-left-radius: 0.5rem;
-            border-top-right-radius: 0.5rem;
-        }
-
-        /* Estilo del spinner de carga */
-        .loader {
-            border: 4px solid #f3f3f3; 
-            border-top: 4px solid #4ade80; /* verde vibrante */
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 2s linear infinite;
-            display: inline-block;
-            margin-right: 0.5rem;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            font-size: 1rem;
+            font-weight: 700;
+            pointer-events: none;
+            transition: opacity 0.3s;
         }
     </style>
 </head>
 <body class="overflow-hidden">
 
-    <!-- Contenedor de la cámara HTML5 -->
-    <div id="video-container">
-        <video id="camera-feed" autoplay playsinline></video>
-    </div>
-
-    <!-- Mensaje de estado -->
-    <div id="status-message">
-        Cargando WebAR...
-    </div>
-
-    <!-- Overlay de inicio con botón único -->
+    <!-- Overlay de inicio -->
     <div id="start-overlay">
-        <h1 class="text-2xl font-bold text-white mb-6">AR: Reconocimiento de Patrón (Prueba con 'pattern-artarget')</h1>
-        <p class="text-gray-300 mb-6 text-sm max-w-sm">
-            He corregido tu URL a la versión **RAW** para que la librería pueda descargar el archivo binario. ¡Espero que este patrón sea estable!
+        <h1 class="text-3xl font-bold text-white mb-6">Realidad Aumentada con Marcador Numérico</h1>
+        <p class="text-gray-300 mb-8 text-lg max-w-md">
+            Esta implementación usa el **marcador de código de barras 6**, que es estable y no depende de archivos externos rotos.
+        </p>
+        <p class="text-yellow-400 mb-4 text-sm font-semibold">
+            ⚠️ Necesitas un cuadrado con el número **6** para que funcione.
         </p>
         
         <button 
             id="ar-button-start"
-            onclick="initARLegacy()"
-            class="px-8 py-4 bg-green-500 hover:bg-green-600 text-gray-900 font-bold text-lg rounded-lg shadow-xl transition duration-200 transform hover:scale-105 w-80"
+            onclick="initARJS()"
+            class="px-10 py-5 bg-teal-500 hover:bg-teal-600 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105"
         >
-            INICIAR RECONOCIMIENTO
+            INICIAR CÁMARA Y RECONOCIMIENTO
         </button>
 
-        <p class="mt-4 text-gray-300 text-xs mt-8 font-semibold">
-            MARCADOR OBJETIVO ACTUAL: pattern-artarget.patt
+        <p class="mt-8 text-gray-400 text-xs font-semibold">
+            Patrón Objetivo: Barcode (Valor 6).
         </p>
-        <p class="text-red-400 text-xs mt-2 font-bold">
-            ⚠️ Si la carga del patrón falla, solo hay una solución 100% fiable: debes descargar el archivo patt y servirlo tú mismo.
-        </p>
-        <a href="https://github.com/Everestech/webar-placement/blob/img/pattern-artarget.png" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm mt-2 block">
-            Ver/Imprimir Imagen del Patrón (para la detección)
-        </a>
     </div>
 
-    <!-- 
-        ============================================================
-        Script: Lógica de Three.js y JSARToolkit
-        ============================================================
-    -->
+    <!-- Mensaje de estado flotante -->
+    <div id="status-message">
+        Esperando inicio...
+    </div>
+
+    <!-- Escena de A-Frame con AR.js -->
+    <a-scene 
+        embedded 
+        id="ar-scene"
+        vr-mode-ui="enabled: false" 
+        renderer="logarithmicDepthBuffer: true;"
+        style="display: none;"
+        arjs="sourceType: webcam; debugUIEnabled: false;"
+    >
+        <!-- 
+            Componente AR.js: 
+            type='barcode' y value='6' garantizan la estabilidad, ya que el patrón
+            necesario (un cuadrado con el número 6) se genera internamente.
+        -->
+        <a-marker 
+            type='barcode' 
+            value='6' 
+            smooth="true" 
+            smoothCount="10" 
+            smoothThreshold="0.5" 
+            id="marker-barcode-6"
+        >
+            <!-- 
+                Modelo 3D que se mostrará cuando se reconozca el patrón 6.
+            -->
+            <a-entity 
+                gltf-model="url(https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb)"
+                scale="0.1 0.1 0.1" 
+                rotation="0 0 0"
+                position="0 0 0.1" 
+            ></a-entity>
+
+            <!-- Agregamos una luz para que el modelo se vea bien -->
+            <a-light type="ambient" color="#FFF"></a-light>
+            <a-light type="directional" position="0 1 0" color="#AAA" intensity="0.8"></a-light>
+        </a-marker>
+
+        <!-- Componente nativo de cámara de A-Frame -->
+        <a-entity camera></a-entity>
+    </a-scene>
+
     <script>
-        // --- CONSTANTES ---
-        const MODEL_URL = "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb";
-        
-        // *** Nuevo Patrón basado en la URL proporcionada por el usuario (versión RAW corregida) ***
-        const PATTERN_URL = "https://raw.githubusercontent.com/Everestech/webar-placement/img/pattern-artarget.patt"; 
-        
-        const MARKER_SIZE = 80; // Tamaño del marcador en mm
-
-        // Variables de Three.js
-        let scene, camera, renderer;
-        let armstrongModel = null;
-        let statusMessageEl;
-        let videoElement;
-        
-        // Variables de ARToolKit
-        let arToolkitContext;
-        let markerRoot;
-        let markerControls; 
-
-        // --- 0. Cargar el Modelo GLTF ---
-        async function loadModel() {
-            statusMessageEl.innerHTML = '<span class="loader"></span> Cargando modelo 3D...';
-            
-            const loader = new THREE.GLTFLoader();
-            return new Promise((resolve, reject) => {
-                loader.load(MODEL_URL, (gltf) => {
-                    armstrongModel = gltf.scene;
-                    // Reducir la escala y centrar el pivote
-                    armstrongModel.scale.set(0.1, 0.1, 0.1); 
-                    armstrongModel.visible = false; 
-                    resolve();
-                }, undefined, reject);
-            });
-        }
-
-        // --- 1. Inicialización de Three.js ---
-        function initThree() {
-            statusMessageEl.innerHTML = '<span class="loader"></span> Inicializando motor 3D...';
-
-            scene = new THREE.Scene();
-            camera = new THREE.Camera(); 
-            scene.add(camera);
-
-            renderer = new THREE.WebGLRenderer({
-                antialias: true,
-                alpha: true
-            });
-            renderer.setClearColor(new THREE.Color('lightgrey'), 0);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            document.body.appendChild(renderer.domElement);
-            
-            // Iluminación
-            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-            directionalLight.position.set(0, 5, 2);
-            scene.add(directionalLight);
-            
-            markerRoot = new THREE.Group();
-            scene.add(markerRoot);
-            markerRoot.add(armstrongModel);
-
-            window.addEventListener('resize', onWindowResize, false);
-            
-            document.querySelector('canvas').style.display = 'block';
-        }
-
-        // --- 2. Función de redimensionamiento (CRÍTICA) ---
-        function onResize() {
-            if (markerControls && arToolkitContext) {
-                markerControls.onResize(); 
-                arToolkitContext.changeMatrixMode(camera.projectionMatrix); 
-                renderer.setSize(window.innerWidth, window.innerHeight); 
-            }
-        }
-        
-        function onWindowResize() {
-            onResize();
-        }
-        
-        // --- 3. Iniciar Cámara HTML5 y flujo de AR ---
-        async function initARLegacy() {
+        // --- 1. Inicializar AR.js ---
+        function initARJS() {
             document.getElementById('start-overlay').style.display = 'none';
-            statusMessageEl.innerHTML = '<span class="loader"></span> Solicitando y forzando cámara trasera (environment)...';
+            const sceneEl = document.getElementById('ar-scene');
+            sceneEl.style.display = 'block';
 
-            videoElement = document.getElementById('camera-feed');
+            const statusMessage = document.getElementById('status-message');
+            statusMessage.textContent = 'Solicitando permisos de cámara...';
 
-            try {
-                // Forzar SÓLO la cámara trasera (environment) para evitar el salto
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: {
-                        facingMode: { ideal: 'environment' } 
-                    }
-                });
-                
-                videoElement.srcObject = stream;
-                videoElement.play();
+            const markerEl = document.getElementById('marker-barcode-6');
 
-                await new Promise(resolve => videoElement.onloadedmetadata = resolve);
-
-                // La cámara se ha abierto correctamente y está estable
-                await loadModel();
-                initThree();
-                initARToolKit(); 
-                
-                renderer.setAnimationLoop(update); 
-
-                statusMessageEl.textContent = 'Cámara trasera activa y estable. Busque el patrón.';
-
-            } catch (err) {
-                console.error('Error al iniciar la cámara trasera:', err);
-                statusMessageEl.textContent = 'ERROR: No se pudo acceder a la cámara trasera. Asegúrese de que su dispositivo lo permite o pruebe en otro navegador/dispositivo.';
-                document.getElementById('start-overlay').style.display = 'flex';
-            }
-        }
-        
-        // --- 4. Inicializar ARToolKit ---
-        function initARToolKit() {
-            // Contexto de ARToolKit
-            arToolkitContext = new ARToolkitContext({
-                cameraParametersUrl: ARToolkitContext.baseURL + 'data/camera_para.dat',
-                detectionMode: 'mono',
-                imageSmoothingEnabled: true,
-                canvas: renderer.domElement 
-            });
-
-            // Inicializar el contexto y configurar la cámara de Three.js
-            arToolkitContext.init(function onCompleted(){
-                camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
-            });
-
-            // Inicialización del marcador (Image Tracking)
-            markerControls = new ARToolkitSource({ 
-                sourceType: 'video',
-                sourceElement: videoElement,
-            });
-
-            markerControls.init(function onCompleted(){
-                onResize();
-            });
-
-            // Creamos los controles que buscarán el patrón (.patt) con la URL corregida
-            let patternControls = new ARToolkitPatternControls(markerRoot, arToolkitContext, {
-                type: 'pattern',
-                patternUrl: PATTERN_URL, 
-                changeMatrixMode: 'cameraTransformMatrix',
-                size: MARKER_SIZE
+            // Escuchar el evento de inicialización de la cámara (propiedad de AR.js)
+            sceneEl.addEventListener('arjs-video-loaded', function () {
+                statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de código de barras con el número 6!';
             });
             
-            // Posicionar el modelo ligeramente por encima del marcador
-            armstrongModel.position.set(0, 0, 0); 
-            
-            statusMessageEl.textContent = 'Busque el patrón. Si lo detecta, el modelo aparecerá.';
-            armstrongModel.visible = false;
+            // 2. Escuchar la detección del marcador
+            markerEl.addEventListener('markerFound', function() {
+                statusMessage.textContent = '¡MARCADOR 6 DETECTADO! Astronauta visible.';
+            });
+
+            markerEl.addEventListener('markerLost', function() {
+                statusMessage.textContent = 'Marcador perdido. Siga enfocando el cuadrado con el número 6.';
+            });
+
+            // En caso de fallo de la cámara
+            sceneEl.addEventListener('arjs-error', function (err) {
+                 statusMessage.innerHTML = `
+                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar la cámara o la AR. (Error: ${err.detail || 'Desconocido'}).
+                    <br>
+                    Verifique los permisos de su navegador y asegúrese de usar una conexión segura (HTTPS).
+                 `;
+            });
         }
-
-        // --- 5. Bucle de Actualización y Renderizado ---
-        function update() {
-            
-            // 1. Actualizar el contexto de ARToolKit (necesario para la detección de marcadores)
-            if (arToolkitContext && arToolkitContext.ready) {
-                arToolkitContext.update(videoElement);
-            }
-
-            // 2. Comprobar si el marcador está visible
-            if (markerRoot.visible) {
-                 if (!armstrongModel.visible) {
-                    armstrongModel.visible = true;
-                    statusMessageEl.textContent = '¡MARCADOR DETECTADO! Modelo 3D activo.';
-                 }
-            } else {
-                if (armstrongModel.visible) {
-                    armstrongModel.visible = false;
-                    statusMessageEl.textContent = 'Marcador no visible. Busque el patrón.';
-                }
-            }
-
-            // 3. Renderizar la escena 3D
-            renderer.render(scene, camera);
-        }
-
-        // Iniciar al cargar la ventana
-        window.onload = function() {
-            statusMessageEl = document.getElementById('status-message');
-        };
     </script>
 </body>
 </html>
