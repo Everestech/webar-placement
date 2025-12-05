@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Reconocimiento de Imagen con Visión Artificial</title>
+    <title>WebAR: Reconocimiento de Imagen (Prueba con 'pattern-artarget')</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -35,12 +35,11 @@
             z-index: 10; 
         }
 
-        /* El stream de video de la cámara - AHORA SIN TRANSFORM: SCALEX(-1) */
+        /* El stream de video de la cámara */
         #camera-feed {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            /* La inversión se gestionará automáticamente o se omitirá */
         }
 
         /* El canvas de Three.js se superpone al video */
@@ -116,9 +115,9 @@
 
     <!-- Overlay de inicio con botón único -->
     <div id="start-overlay">
-        <h1 class="text-2xl font-bold text-white mb-6">AR: Reconocimiento de Imagen (Solución Estable)</h1>
+        <h1 class="text-2xl font-bold text-white mb-6">AR: Reconocimiento de Patrón (Prueba con 'pattern-artarget')</h1>
         <p class="text-gray-300 mb-6 text-sm max-w-sm">
-            Se ha corregido el error de sincronización. Por favor, asegúrese de tener a mano la imagen del marcador.
+            He corregido tu URL a la versión **RAW** para que la librería pueda descargar el archivo binario. ¡Espero que este patrón sea estable!
         </p>
         
         <button 
@@ -129,12 +128,15 @@
             INICIAR RECONOCIMIENTO
         </button>
 
-        <p class="mt-4 text-gray-300 text-xs mt-8">
-            MARCADOR OBJETIVO (Patrón HIRO): 
-            <a href="https://raw.githubusercontent.com/artoolkit/artoolkit5/master/bin/Data/patt.hiro" target="_blank" class="text-blue-400 hover:text-blue-300">
-                Ver Patrón HIRO (Imprima o muestre en otra pantalla)
-            </a>
+        <p class="mt-4 text-gray-300 text-xs mt-8 font-semibold">
+            MARCADOR OBJETIVO ACTUAL: pattern-artarget.patt
         </p>
+        <p class="text-red-400 text-xs mt-2 font-bold">
+            ⚠️ Si la carga del patrón falla, solo hay una solución 100% fiable: debes descargar el archivo patt y servirlo tú mismo.
+        </p>
+        <a href="https://github.com/Everestech/webar-placement/blob/img/pattern-artarget.png" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm mt-2 block">
+            Ver/Imprimir Imagen del Patrón (para la detección)
+        </a>
     </div>
 
     <!-- 
@@ -145,7 +147,10 @@
     <script>
         // --- CONSTANTES ---
         const MODEL_URL = "https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb";
-        const PATTERN_URL = "https://cdn.jsdelivr.net/gh/artoolkit/jsartoolkit@master/src/markers/patt.hiro";
+        
+        // *** Nuevo Patrón basado en la URL proporcionada por el usuario (versión RAW corregida) ***
+        const PATTERN_URL = "https://raw.githubusercontent.com/Everestech/webar-placement/img/pattern-artarget.patt"; 
+        
         const MARKER_SIZE = 80; // Tamaño del marcador en mm
 
         // Variables de Three.js
@@ -157,7 +162,7 @@
         // Variables de ARToolKit
         let arToolkitContext;
         let markerRoot;
-        let markerControls; // Necesario para la función onResize
+        let markerControls; 
 
         // --- 0. Cargar el Modelo GLTF ---
         async function loadModel() {
@@ -167,6 +172,7 @@
             return new Promise((resolve, reject) => {
                 loader.load(MODEL_URL, (gltf) => {
                     armstrongModel = gltf.scene;
+                    // Reducir la escala y centrar el pivote
                     armstrongModel.scale.set(0.1, 0.1, 0.1); 
                     armstrongModel.visible = false; 
                     resolve();
@@ -207,29 +213,28 @@
             document.querySelector('canvas').style.display = 'block';
         }
 
-        // --- FIX CRITICAL: Función onResize faltante ---
+        // --- 2. Función de redimensionamiento (CRÍTICA) ---
         function onResize() {
             if (markerControls && arToolkitContext) {
-                markerControls.onResize(); // Se ajusta el tamaño del stream de video
-                arToolkitContext.changeMatrixMode(camera.projectionMatrix); // Se recalcula la matriz de proyección
-                renderer.setSize(window.innerWidth, window.innerHeight); // Se ajusta el tamaño del renderizador
+                markerControls.onResize(); 
+                arToolkitContext.changeMatrixMode(camera.projectionMatrix); 
+                renderer.setSize(window.innerWidth, window.innerHeight); 
             }
         }
         
         function onWindowResize() {
             onResize();
         }
-        // --- FIN FIX CRITICAL ---
         
-        // --- 2. Iniciar Cámara HTML5 y flujo de AR ---
+        // --- 3. Iniciar Cámara HTML5 y flujo de AR ---
         async function initARLegacy() {
             document.getElementById('start-overlay').style.display = 'none';
-            statusMessageEl.innerHTML = '<span class="loader"></span> Solicitando cámara trasera (facingMode: environment)...';
+            statusMessageEl.innerHTML = '<span class="loader"></span> Solicitando y forzando cámara trasera (environment)...';
 
             videoElement = document.getElementById('camera-feed');
 
             try {
-                // Intentar usar la cámara trasera (environment)
+                // Forzar SÓLO la cámara trasera (environment) para evitar el salto
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: {
                         facingMode: { ideal: 'environment' } 
@@ -248,33 +253,16 @@
                 
                 renderer.setAnimationLoop(update); 
 
-                statusMessageEl.textContent = 'Cámara trasera activa y estable. Busque el marcador HIRO.';
+                statusMessageEl.textContent = 'Cámara trasera activa y estable. Busque el patrón.';
 
             } catch (err) {
-                console.error('Error al iniciar la cámara (Visión Artificial):', err);
-                // Si falla la trasera, intentar con la cámara por defecto
-                try {
-                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: true
-                     });
-                     videoElement.srcObject = stream;
-                     videoElement.play();
-                     await new Promise(resolve => videoElement.onloadedmetadata = resolve);
-                     
-                     await loadModel();
-                     initThree();
-                     initARToolKit(); 
-                     renderer.setAnimationLoop(update); 
-                     statusMessageEl.textContent = 'Cámara por defecto activa. Busque el marcador HIRO.';
-
-                } catch (e) {
-                    statusMessageEl.textContent = 'ERROR FATAL: No se pudo acceder a la cámara o el stream fue bloqueado por permisos. Reinicie el navegador.';
-                    document.getElementById('start-overlay').style.display = 'flex';
-                }
+                console.error('Error al iniciar la cámara trasera:', err);
+                statusMessageEl.textContent = 'ERROR: No se pudo acceder a la cámara trasera. Asegúrese de que su dispositivo lo permite o pruebe en otro navegador/dispositivo.';
+                document.getElementById('start-overlay').style.display = 'flex';
             }
         }
         
-        // --- 3. Inicializar ARToolKit ---
+        // --- 4. Inicializar ARToolKit ---
         function initARToolKit() {
             // Contexto de ARToolKit
             arToolkitContext = new ARToolkitContext({
@@ -290,20 +278,19 @@
             });
 
             // Inicialización del marcador (Image Tracking)
-            markerControls = new ARToolkitSource({ // Usar la variable global
+            markerControls = new ARToolkitSource({ 
                 sourceType: 'video',
                 sourceElement: videoElement,
             });
 
             markerControls.init(function onCompleted(){
-                // Sincronizar el tamaño del video con el canvas (La función onResize que faltaba)
                 onResize();
             });
 
-            // Creamos los controles que buscarán el patrón en el video
+            // Creamos los controles que buscarán el patrón (.patt) con la URL corregida
             let patternControls = new ARToolkitPatternControls(markerRoot, arToolkitContext, {
                 type: 'pattern',
-                patternUrl: PATTERN_URL,
+                patternUrl: PATTERN_URL, 
                 changeMatrixMode: 'cameraTransformMatrix',
                 size: MARKER_SIZE
             });
@@ -311,11 +298,11 @@
             // Posicionar el modelo ligeramente por encima del marcador
             armstrongModel.position.set(0, 0, 0); 
             
-            statusMessageEl.textContent = 'Busque el marcador HIRO. Si lo detecta, el modelo aparecerá.';
+            statusMessageEl.textContent = 'Busque el patrón. Si lo detecta, el modelo aparecerá.';
             armstrongModel.visible = false;
         }
 
-        // --- 4. Bucle de Actualización y Renderizado ---
+        // --- 5. Bucle de Actualización y Renderizado ---
         function update() {
             
             // 1. Actualizar el contexto de ARToolKit (necesario para la detección de marcadores)
@@ -324,7 +311,6 @@
             }
 
             // 2. Comprobar si el marcador está visible
-            // ARToolKit actualiza automáticamente la matriz 'markerRoot.matrixWorld' si el marcador es visto
             if (markerRoot.visible) {
                  if (!armstrongModel.visible) {
                     armstrongModel.visible = true;
@@ -333,7 +319,7 @@
             } else {
                 if (armstrongModel.visible) {
                     armstrongModel.visible = false;
-                    statusMessageEl.textContent = 'Marcador no visible. Busque el patrón HIRO.';
+                    statusMessageEl.textContent = 'Marcador no visible. Busque el patrón.';
                 }
             }
 
