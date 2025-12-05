@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR: Seguimiento de Imagen (Image Tracking)</title>
+    <title>WebAR: Seguimiento de Imagen y Fallback</title>
     
     <!-- Tailwind CSS para estilos de UI (Solo para desarrollo) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -86,21 +86,30 @@
 
     <!-- Overlay de inicio con botones de detección dinámica -->
     <div id="start-overlay">
-        <h1 class="text-2xl font-bold text-white mb-6">AR: Colocación sobre Foto</h1>
+        <h1 class="text-2xl font-bold text-white mb-6">AR: Colocación sobre Foto o Plano</h1>
         <p class="text-gray-300 mb-6 text-sm max-w-sm">
-            Para iniciar, **debes tener impresa la imagen objetivo** (un cuadrado negro con el texto "AR TARGET") y colocarla en una superficie plana.
+            Intenta primero el Seguimiento de Imagen. Si la cámara no abre, usa el modo "Detección de Plano Simple".
         </p>
         
-        <!-- Botón para Android/WebXR Image Tracking -->
+        <!-- Botón 1: Android/WebXR Image Tracking (Avanzado) -->
         <button 
-            id="ar-button-android"
-            onclick="initAR()"
-            class="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105 mb-4"
+            id="ar-button-image-tracking"
+            onclick="initAR('image-tracking')"
+            class="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105 mb-3"
         >
-            INICIAR AR (Seguimiento de Imagen)
+            1. INICIAR AR (Seguimiento de Imagen)
         </button>
 
-        <!-- Model Viewer para iOS Quick Look y Fallback -->
+        <!-- Botón 2: Android/WebXR Plane Detection (Simple/Universal Fallback) -->
+        <button 
+            id="ar-button-simple-fallback"
+            onclick="initAR('plane-detection')"
+            class="px-8 py-4 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105 mb-6"
+        >
+            2. INICIAR AR (Detección de Plano Simple)
+        </button>
+
+        <!-- Model Viewer para iOS Quick Look y Fallback (Siempre presente) -->
         <model-viewer 
             src="https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb" 
             alt="Modelo de Neil Armstrong" 
@@ -119,14 +128,14 @@
             onclick="document.getElementById('model-viewer-ios').activateAR()"
             class="hidden px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-xl transition duration-200 transform hover:scale-105"
         >
-            INICIAR AR (Quick Look - Fallback)
+            3. INICIAR AR (Quick Look - iOS NATIVO)
         </button>
 
         <p class="mt-4 text-gray-300 text-sm" id="platform-info">Detectando plataforma...</p>
         
-        <!-- URL de la imagen que el usuario debe imprimir (AHORA ESTABLE) -->
+        <!-- URL de la imagen que el usuario debe imprimir (ESTABLE) -->
         <p class="mt-4 text-gray-400 text-xs">
-            Imagen objetivo: 
+            Imagen objetivo (Solo para el modo 1): 
             <a href="https://placehold.co/500x500/000000/FFFFFF/png?text=AR+TARGET" target="_blank" class="text-blue-400 hover:text-blue-300">
                 Placeholder AR TARGET (¡Imprimir a 15cm!)
             </a>
@@ -135,7 +144,7 @@
 
     <!-- 
         ============================================================
-        Script: Lógica de WebXR Image Tracking
+        Script: Lógica de WebXR (Seguimiento de Imagen y Detección de Plano)
         ============================================================
     -->
     <script>
@@ -151,6 +160,7 @@
         let statusMessageEl;
         let armstrongModel = null;
         let targetImageBitmap = null; 
+        let currentARMode = null; // 'image-tracking' or 'plane-detection'
 
         // --- Detección de Plataforma ---
         function isIOS() {
@@ -167,6 +177,7 @@
                 const loader = new THREE.GLTFLoader();
                 loader.load(MODEL_URL, (gltf) => {
                     armstrongModel = gltf.scene;
+                    // Reducir la escala
                     armstrongModel.scale.set(0.1, 0.1, 0.1); 
                     armstrongModel.visible = false; 
                     armstrongModel.traverse((node) => {
@@ -179,29 +190,27 @@
                 }, undefined, reject);
             });
 
-            // 2. Cargar Imagen Objetivo como ImageBitmap
+            // 2. Cargar Imagen Objetivo (Solo necesaria para Image Tracking)
             const imagePromise = fetch(TARGET_IMAGE_URL)
-                .then(response => {
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    return response.blob();
-                })
+                .then(response => response.blob())
                 .then(blob => createImageBitmap(blob))
                 .then(bitmap => {
                     targetImageBitmap = bitmap;
                 })
                 .catch(error => {
-                    console.error('Error cargando imagen objetivo:', error);
-                    throw new Error(`[Fallo de RED/Carga] No se pudo cargar la imagen objetivo. Error: ${error.message}`);
+                    console.warn('Advertencia: No se pudo cargar la imagen objetivo. El seguimiento de imágenes podría fallar, pero la detección de plano funcionará.', error);
                 });
 
             try {
                 await Promise.all([modelPromise, imagePromise]);
-                statusMessageEl.textContent = 'Activos listos. Presione INICIAR AR.';
-                document.getElementById('ar-button-android').disabled = false;
+                statusMessageEl.textContent = 'Activos listos. Seleccione un modo AR.';
+                document.getElementById('ar-button-image-tracking').disabled = false;
+                document.getElementById('ar-button-simple-fallback').disabled = false;
             } catch (e) {
                 console.error(e);
-                statusMessageEl.textContent = `[ERROR DE ACTIVOS] ${e.message}. El seguimiento de imágenes requiere que la foto sea cargada correctamente.`;
-                document.getElementById('ar-button-android').disabled = true;
+                statusMessageEl.textContent = `[ERROR DE ACTIVOS] ${e.message}. Verifique su conexión.`;
+                document.getElementById('ar-button-image-tracking').disabled = true;
+                document.getElementById('ar-button-simple-fallback').disabled = true;
             }
         }
 
@@ -209,24 +218,26 @@
         function initThree() {
             const isApple = isIOS();
             statusMessageEl = document.getElementById('status-message');
-            const androidButton = document.getElementById('ar-button-android');
+            const imageTrackingButton = document.getElementById('ar-button-image-tracking');
+            const simpleFallbackButton = document.getElementById('ar-button-simple-fallback');
             const iosButton = document.getElementById('ar-button-ios');
             const platformInfo = document.getElementById('platform-info');
 
-            androidButton.disabled = true; 
+            imageTrackingButton.disabled = true; 
+            simpleFallbackButton.disabled = true;
 
             if (isApple) {
                 // Configuración para iOS (Quick Look)
-                androidButton.style.display = 'none';
+                imageTrackingButton.style.display = 'none';
+                simpleFallbackButton.style.display = 'none';
                 iosButton.classList.remove('hidden');
-                statusMessageEl.textContent = 'Dispositivo iOS detectado. Por favor, use el botón verde "Quick Look - Fallback".';
-                platformInfo.textContent = 'Plataforma: iOS. WebXR Image Tracking no soportado. Usando Fallback.';
-                // No necesitamos cargar Three.js si usamos solo Model Viewer para iOS
+                statusMessageEl.textContent = 'Dispositivo iOS detectado. Por favor, use el botón verde.';
+                platformInfo.textContent = 'Plataforma: iOS. Usa el botón 3.';
                 return;
             }
 
             // Configuración para Android/WebXR
-            platformInfo.textContent = 'Plataforma: Android/Otro. Usando WebXR Image Tracking.';
+            platformInfo.textContent = 'Plataforma: Android/Otro. Usa el botón 1 o 2.';
             iosButton.style.display = 'none'; 
             
             // Inicialización de Three.js
@@ -240,14 +251,12 @@
             document.body.appendChild(renderer.domElement);
             
             // Iluminación
-            const light = new THREE.AmbientLight(0xffffff, 0.8);
-            scene.add(light);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
             directionalLight.position.set(0, 5, 2);
-            directionalLight.castShadow = true;
             scene.add(directionalLight);
-            renderer.shadowMap.enabled = true; 
             
+            // El modelo se añade una vez, su visibilidad se controla en el bucle
             scene.add(armstrongModel);
 
             window.addEventListener('resize', onWindowResize, false);
@@ -263,77 +272,122 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
+        
+        // Objeto para manejar el raycasting en modo Detección de Plano
+        let controller;
+        let raycaster;
+        let hitTestSource = null;
+        let reticle; 
 
-        // --- 2. Iniciación de WebXR (Image Tracking) ---
-        async function initAR() {
-            if (isIOS()) {
-                // En iOS, el botón de Android no debe estar disponible, pero si lo presionan, redirigir al fallback.
-                document.getElementById('model-viewer-ios').activateAR();
-                return;
-            }
-            if (!armstrongModel || !targetImageBitmap) {
-                statusMessageEl.textContent = 'Esperando la carga de activos...';
-                return; 
-            }
+
+        // --- 2. Iniciación de WebXR (Unificada) ---
+        async function initAR(mode) {
+            currentARMode = mode;
+
+            if (isIOS() && mode !== 'plane-detection') return; // iOS debe usar Quick Look
 
             if (!navigator.xr) {
-                statusMessageEl.textContent = 'WebXR no soportado en este dispositivo/navegador. Intente actualizar Chrome.';
+                statusMessageEl.textContent = 'WebXR no soportado en este dispositivo/navegador.';
                 return;
             }
 
-            // Verificación de disponibilidad de seguimiento de imágenes
-            const isSupported = await navigator.xr.isSessionSupported('immersive-ar', { 
-                requiredFeatures: ['local'],
-                trackedImages: [{ image: targetImageBitmap, measuredWidthInMeters: TARGET_IMAGE_SIZE_METERS }]
-            });
-            
-            if (!isSupported) {
-                 statusMessageEl.textContent = 'ERROR: Su dispositivo no soporta la característica de Seguimiento de Imagen (WebXR).';
-                 return;
-            }
+            let sessionOptions = { requiredFeatures: ['local'] };
+            let sessionFeature = 'local';
+            let initialStatusText = '';
 
-            // Configurar la imagen a rastrear
-            const trackableImage = {
-                image: targetImageBitmap,
-                measuredWidthInMeters: TARGET_IMAGE_SIZE_METERS, 
-            };
+            if (mode === 'image-tracking') {
+                if (!targetImageBitmap) {
+                    statusMessageEl.textContent = 'Error: La imagen objetivo no se cargó. No se puede iniciar el Seguimiento de Imagen.';
+                    return;
+                }
+                sessionOptions.trackedImages = [{ 
+                    image: targetImageBitmap,
+                    measuredWidthInMeters: TARGET_IMAGE_SIZE_METERS 
+                }];
+                initialStatusText = 'Cámara iniciada. Busque la imagen impresa "AR TARGET"...';
+            } else if (mode === 'plane-detection') {
+                sessionOptions.requiredFeatures.push('hit-test'); // Necesario para detectar planos
+                sessionFeature = 'viewer';
+                initialStatusText = 'Cámara iniciada. Mueva el teléfono para buscar una superficie plana.';
+            }
 
             try {
                 // Solicitar la sesión de AR
-                xrSession = await navigator.xr.requestSession('immersive-ar', { 
-                    requiredFeatures: ['local'],
-                    trackedImages: [trackableImage]
-                });
+                xrSession = await navigator.xr.requestSession('immersive-ar', sessionOptions);
 
                 renderer.xr.setSession(xrSession);
-                xrRefSpace = await xrSession.requestReferenceSpace('local'); 
+                xrRefSpace = await xrSession.requestReferenceSpace(sessionFeature); 
                 
                 document.getElementById('start-overlay').style.display = 'none';
                 
+                // Configuración específica para Detección de Plano
+                if (mode === 'plane-detection') {
+                    setupPlaneDetectionControls();
+                }
+
                 // INICIAR EL BUCLE DE ANIMACIÓN WEBXR
                 renderer.setAnimationLoop(onXRFrame); 
                 
                 xrSession.addEventListener('end', onXRSessionEnd);
 
-                statusMessageEl.textContent = 'Cámara iniciada. Busque la imagen impresa "AR TARGET"...';
+                statusMessageEl.textContent = initialStatusText;
 
             } catch (e) {
-                console.error('ERROR al iniciar WebXR AR (Image Tracking):', e);
-                // Proporciona un mensaje de error más específico para el usuario
-                let errorMessage = 'Fallo al iniciar AR: Revise permisos de cámara o compatibilidad.';
+                console.error(`ERROR al iniciar WebXR AR (${mode}):`, e);
+                let errorMessage = `Fallo al iniciar AR (${mode}): Revise permisos de cámara o compatibilidad.`;
                 if (e.name === 'NotAllowedError') {
                     errorMessage = 'ERROR DE PERMISOS: Debe permitir el acceso a la cámara para iniciar AR.';
-                } else if (e.name === 'SecurityError') {
-                    errorMessage = 'ERROR DE SEGURIDAD: La cámara no puede ser iniciada. Intente en un navegador diferente.';
                 }
                 statusMessageEl.textContent = errorMessage;
             }
         }
+        
+        // --- 3. Configuración para Detección de Plano ---
+        function setupPlaneDetectionControls() {
+            // Reticle (el círculo que indica dónde se colocará el modelo)
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.05, 0.1, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.8, transparent: true })
+            );
+            reticle.visible = false;
+            scene.add(reticle);
 
-        // --- 3. Bucle de Renderizado WebXR ---
+            // Controlador para escuchar clics/taps
+            controller = renderer.xr.getController(0);
+            controller.addEventListener('select', onSelect);
+            scene.add(controller);
+
+            // Raycaster para pruebas de impacto (hit-test)
+            raycaster = new THREE.Raycaster();
+        }
+        
+        function onSelect() {
+            if (reticle.visible) {
+                // Colocar el modelo en la posición del reticle
+                armstrongModel.position.copy(reticle.position);
+                armstrongModel.visible = true;
+                // Una vez colocado, podemos deshabilitar el raycasting si solo queremos colocarlo una vez.
+                // hitTestSource = null; 
+                statusMessageEl.textContent = 'Modelo colocado en el plano.';
+            }
+        }
+
+
+        // --- 4. Bucle de Renderizado WebXR ---
         function onXRFrame(time, frame) {
             
-            // --- A. Lógica de Seguimiento de Imagen ---
+            if (currentARMode === 'image-tracking') {
+                handleImageTracking(frame);
+            } else if (currentARMode === 'plane-detection') {
+                handlePlaneDetection(frame);
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // --- Lógica de Seguimiento de Imagen ---
+        function handleImageTracking(frame) {
+            
             const trackedImageSet = frame.getTrackedImageSet ? frame.getTrackedImageSet() : (frame.getTrackedImage ? frame.getTrackedImage(xrRefSpace) : []);
             
             let isImageTracked = false;
@@ -348,12 +402,9 @@
                     
                     if (pose) {
                         const matrix = new THREE.Matrix4().fromArray(pose.transform.matrix);
-                        
                         armstrongModel.applyMatrix4(matrix);
                         armstrongModel.visible = true;
-                        
-                        // Levanta el modelo la mitad de su altura
-                        armstrongModel.position.y += armstrongModel.scale.y * 0.5; 
+                        armstrongModel.position.y += armstrongModel.scale.y * 0.5; // Levantar
                         
                         statusMessageEl.textContent = '¡IMAGEN DETECTADA! Moviendo el modelo a la posición.';
                     }
@@ -364,28 +415,68 @@
             if (!isImageTracked) {
                 if (armstrongModel) {
                     armstrongModel.visible = false;
-                    // Solo actualiza el mensaje si no hay un error específico en la consola
                     statusMessageEl.textContent = 'Cámara iniciada. Busque la imagen impresa "AR TARGET"...';
                 }
             }
-            
-            // --- B. Renderizado
-            renderer.render(scene, camera);
+        }
+        
+        // --- Lógica de Detección de Plano ---
+        function handlePlaneDetection(frame) {
+            if (!hitTestSource) {
+                // Si aún no tenemos el hit test source, solicitamos uno
+                frame.getSession().requestHitTestSource({ space: xrRefSpace })
+                    .then(source => {
+                        hitTestSource = source;
+                        // Para evitar que el usuario se confunda con el modelo del tracking de imagen
+                        armstrongModel.visible = false;
+                        reticle.visible = false;
+                    })
+                    .catch(error => {
+                        console.error('Error al solicitar hit test source:', error);
+                        statusMessageEl.textContent = 'ERROR: No se pudo iniciar la detección de plano. Intente de nuevo.';
+                        // Finalizar la sesión si hay un error grave.
+                        xrSession.end();
+                    });
+            }
+
+            if (hitTestSource) {
+                const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+                if (hitTestResults.length > 0) {
+                    // Si encontramos un plano
+                    const hit = hitTestResults[0];
+                    const pose = hit.getPose(xrRefSpace);
+                    
+                    reticle.visible = true;
+                    reticle.position.setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
+
+                    statusMessageEl.textContent = 'Plano detectado. Toque la pantalla para colocar el modelo.';
+                } else {
+                    // Si no encontramos un plano
+                    reticle.visible = false;
+                    statusMessageEl.textContent = 'Mueva el teléfono lentamente para escanear la superficie.';
+                }
+            }
         }
 
-        // --- 4. Manejador de Finalización de Sesión ---
+
+        // --- 5. Manejador de Finalización de Sesión ---
         function onXRSessionEnd() {
             renderer.setAnimationLoop(null); 
             
             xrSession = null;
             xrRefSpace = null;
+            hitTestSource = null;
             
             if (armstrongModel) {
                 armstrongModel.visible = false;
             }
+            if (reticle) {
+                reticle.visible = false;
+            }
 
             document.getElementById('start-overlay').style.display = 'flex';
-            statusMessageEl.textContent = 'Sesión AR terminada. Presione INICIAR AR para comenzar de nuevo.';
+            statusMessageEl.textContent = 'Sesión AR terminada. Seleccione un modo AR para comenzar de nuevo.';
         }
 
         // Iniciar al cargar la ventana
