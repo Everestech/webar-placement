@@ -8,43 +8,41 @@
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- 
-        1. A-Frame: Framework para crear escenas 3D declarativamente.
-        2. AR.js: Librería de AR, integrada con A-Frame para reconocimiento de patrones.
-    -->
+    <!-- Librerías de AR -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        /* Estilos generales */
+        /* Estilos CRÍTICOS para garantizar el fullscreen estable en móvil */
+        
+        /* 1. Body: Fija el contenedor principal al viewport y usa la altura calculada */
         body { 
             margin: 0; 
             padding: 0; 
             font-family: 'Inter', sans-serif; 
             overflow: hidden; 
             background-color: black;
-            /* CRÍTICO: Usar la variable CSS --vh para la altura real del viewport */
-            height: 100vh; /* Fallback */
-            height: calc(var(--vh, 1vh) * 100);
+            position: fixed; /* CRÍTICO: Fija la posición para eliminar problemas de scroll */
+            top: 0;
+            left: 0;
             width: 100vw;
+            /* Usa la variable CSS --vh para la altura real del viewport */
+            height: calc(var(--vh, 1vh) * 100); 
         }
         
+        /* 2. a-scene: Debe ocupar exactamente el mismo espacio que el body */
         a-scene {
             width: 100vw;
-            /* CRÍTICO: Usar la misma altura calculada para el canvas de la escena AR */
-            height: 100vh; /* Fallback */
-            height: calc(var(--vh, 1vh) * 100);
+            height: calc(var(--vh, 1vh) * 100); 
         }
 
-        /* Overlay de inicio con botón único: Centrado seguro */
+        /* 3. Overlay de inicio: Centrado perfecto sobre el espacio fijo */
         #start-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
-            /* CRÍTICO: Usar la misma altura calculada para el overlay */
-            height: 100vh; /* Fallback */
-            height: calc(var(--vh, 1vh) * 100);
+            height: calc(var(--vh, 1vh) * 100); /* Utiliza la altura estable */
             background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
             
@@ -57,7 +55,7 @@
             padding: 20px;
         }
 
-        /* Mensaje de estado en la parte inferior */
+        /* 4. Mensaje de estado en la parte inferior (se mantiene fijo) */
         #status-message {
             z-index: 100;
             position: fixed;
@@ -141,10 +139,9 @@
 
     <script>
         // --- Solución CRÍTICA para el problema de 100vh en móviles ---
+        // Calcula y establece la altura real del viewport (sin barras de navegación)
         function setVhProperty() {
-            // Calcula 1% de la altura real del viewport
             let vh = window.innerHeight * 0.01;
-            // Establece la propiedad CSS --vh en el body para que CSS pueda usarla
             document.documentElement.style.setProperty('--vh', `${vh}px`);
         }
 
