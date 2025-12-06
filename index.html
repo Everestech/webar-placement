@@ -3,19 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR.js: Marcador de Imagen Personalizado</title>
+    <title>AR.js: Marcador Personalizado Estable</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Librerías de AR (A-Frame y AR.js) -->
+    <!-- Usando la versión githack para mayor compatibilidad con CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        /* --- ESTILOS CRÍTICOS PARA CENTRADO ABSOLUTO EN MÓVILES --- */
+        /* --- ESTILOS CRÍTICOS PARA LA CORRECCIÓN DEL VIEWER EN MÓVILES --- */
         
-        /* 1. Body: Fija el contenedor principal al viewport y usa la altura calculada (vh fix) */
+        /* Definición de la variable custom para corregir el 100vh en iOS/Android */
+        :root {
+            --vh: 1vh;
+        }
+
+        /* Body debe ser fijo y usar la altura corregida */
         body { 
             margin: 0; 
             padding: 0; 
@@ -29,8 +35,8 @@
             height: calc(var(--vh, 1vh) * 100); 
         }
         
-        /* 2. a-scene: Debe ocupar exactamente el mismo espacio que el body */
-        a-scene {
+        /* a-scene y Overlay deben usar la altura corregida */
+        a-scene, #start-overlay {
             position: fixed; 
             top: 0; 
             left: 0;
@@ -38,38 +44,22 @@
             height: calc(var(--vh, 1vh) * 100); 
         }
 
-        /* CORRECCIÓN CRÍTICA 1: Forzar al CANVAS (el renderizado 3D) a estar anclado y ser fullscreen */
-        a-scene .a-canvas {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        /* CORRECCIÓN CRÍTICA 2: Forzar al elemento de video de la cámara a llenar el contenedor */
+        /* Garantizar que el canvas y el video interno ocupen todo el espacio fijo */
+        a-scene .a-canvas, 
         a-scene video {
-            object-fit: cover !important; 
-            width: 100% !important;
-            height: 100% !important;
-            transform: none !important; 
-            position: absolute !important; 
+            position: absolute !important;
             top: 0 !important;
             left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important; /* Esencial para que el video llene el espacio */
+            transform: none !important; /* Anula transformaciones inesperadas */
         }
-        /* --- FIN DE ESTILOS CRÍTICOS DE CENTRADO --- */
 
-
-        /* 3. Overlay de inicio: Centrado perfecto sobre el espacio fijo */
+        /* El overlay de inicio */
         #start-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: calc(var(--vh, 1vh) * 100); 
             background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
-            
             display: flex;
             justify-content: center;
             align-items: center;
@@ -78,13 +68,13 @@
             padding: 20px;
         }
 
-        /* 4. Mensaje de estado en la parte inferior */
+        /* Mensaje de estado en la parte inferior */
         #status-message {
             z-index: 100;
             position: fixed;
             bottom: 0;
             width: 100%;
-            background-color: rgba(22, 163, 74, 0.9); /* Green-600 */
+            background-color: rgba(22, 163, 74, 0.9); /* Verde (Green-600) */
             color: white;
             padding: 1rem;
             text-align: center;
@@ -101,10 +91,10 @@
     <div id="start-overlay">
         <h1 class="text-3xl font-bold text-white mb-6">Realidad Aumentada con Marcador PERSONALIZADO</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            El marcador se cargará desde su repositorio de GitHub. URL del patrón configurada.
+            El marcador se está cargando de tu URL de GitHub.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
-            ⚠️ Necesitas enfocar la **imagen de marcador personalizada** que subiste a GitHub para ver el astronauta.
+            ⚠️ Enfoca la imagen que usaste para generar este patrón.
         </p>
         
         <button 
@@ -116,13 +106,13 @@
         </button>
 
         <p class="mt-8 text-gray-400 text-xs font-semibold">
-            URL del patrón utilizada: raw.githubusercontent.com/Everestech/webar-placement/refs/heads/img/pattern-artarget.patt
+            URL del patrón: https://raw.githubusercontent.com/Everestech/webar-placement/refs/heads/img/pattern-artarget.patt
         </p>
     </div>
 
     <!-- Mensaje de estado flotante -->
     <div id="status-message">
-        Esperando URL del patrón...
+        Listo para iniciar.
     </div>
 
     <!-- Escena de A-Frame con AR.js -->
@@ -133,10 +123,10 @@
         renderer="logarithmicDepthBuffer: true;"
         style="display: none;"
         
-        <!-- Configuración para un marcador de imagen (pattern) -->
+        <!-- Configuración AR.js para marcador de patrón -->
         arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
     >
-        <!-- Marcador de IMAGEN: Patrón Personalizado (URL INSERTADA) -->
+        <!-- Marcador de IMAGEN: Patrón Personalizado con tu URL de GitHub -->
         <a-marker 
             type='pattern' 
             url='https://raw.githubusercontent.com/Everestech/webar-placement/refs/heads/img/pattern-artarget.patt' 
@@ -145,7 +135,7 @@
             smoothThreshold="0.5" 
             id="marker-custom"
         >
-            <!-- Modelo 3D: Astronauta con escala visible -->
+            <!-- Modelo 3D: Astronauta -->
             <a-entity 
                 gltf-model="url(https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb)"
                 scale="0.5 0.5 0.5" 
@@ -163,19 +153,21 @@
     </a-scene>
 
     <script>
-        // --- Solución CRÍTICA para el problema de 100vh en móviles ---
-        // Calcula y establece la altura real del viewport (sin barras de navegación)
+        // --- Solución CRÍTICA para el problema de 100vh en móviles (viewport fix) ---
+        // Calcula y establece la altura real del viewport, corrigiendo el error de las barras de navegación.
         function setVhProperty() {
             let vh = window.innerHeight * 0.01;
+            // Establece la propiedad CSS custom
             document.documentElement.style.setProperty('--vh', `${vh}px`);
         }
+        
+        // Inicializa y escucha los cambios de tamaño
         setVhProperty();
         window.addEventListener('resize', setVhProperty);
         // -----------------------------------------------------------------
 
         // --- Inicialización de AR.js y Manejo de Eventos ---
         function initARJS() {
-            // La URL ya está configurada directamente en el HTML
             const overlayEl = document.getElementById('start-overlay');
             const sceneEl = document.getElementById('ar-scene');
             const statusMessage = document.getElementById('status-message');
@@ -187,8 +179,9 @@
 
             statusMessage.textContent = 'Solicitando permisos de cámara...';
 
-            // 2. Escuchar el evento de inicialización de la cámara (propiedad de AR.js)
+            // 2. Escuchar el evento de inicialización de la cámara
             sceneEl.addEventListener('arjs-video-loaded', function () {
+                // Re-ejecutar la corrección de viewport después de que el video carga, por si acaso
                 setVhProperty(); 
                 statusMessage.textContent = 'Cámara activa. ¡Busque su marcador personalizado!';
             });
@@ -197,7 +190,6 @@
             markerEl.addEventListener('markerFound', function() {
                 statusMessage.textContent = '¡MARCADOR PERSONALIZADO DETECTADO! Astronauta visible.';
                 statusMessage.style.backgroundColor = 'rgba(168, 85, 247, 0.9)'; // Púrpura
-                console.log("Marcador detectado.");
             });
 
             markerEl.addEventListener('markerLost', function() {
@@ -208,9 +200,9 @@
             // 4. En caso de fallo de la cámara
             sceneEl.addEventListener('arjs-error', function (err) {
                  statusMessage.innerHTML = `
-                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar la cámara. (Error: ${err.detail || 'Desconocido'}).
+                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar la cámara.
                     <br>
-                    Verifique los permisos de su navegador y use un entorno seguro (HTTPS).
+                    Verifique permisos o use un entorno seguro (HTTPS).
                  `;
                  statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; // Rojo
             });
