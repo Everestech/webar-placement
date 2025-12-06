@@ -3,30 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR.js: Marcador de Código de Barras</title>
+    <title>AR.js: Marcador de Imagen Personalizado</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Librerías de AR -->
+    <!-- Librerías de AR (A-Frame y AR.js) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
     <style>
-        /* Estilos CRÍTICOS para garantizar el fullscreen estable en móvil */
+        /* --- ESTILOS CRÍTICOS PARA CENTRADO ABSOLUTO EN MÓVILES --- */
         
-        /* 1. Body: Fija el contenedor principal al viewport y usa la altura calculada */
+        /* 1. Body: Fija el contenedor principal al viewport y usa la altura calculada (vh fix) */
         body { 
             margin: 0; 
             padding: 0; 
             font-family: 'Inter', sans-serif; 
             overflow: hidden; 
             background-color: black;
-            position: fixed; /* CRÍTICO: Fija la posición para eliminar problemas de scroll */
+            position: fixed; 
             top: 0;
             left: 0;
             width: 100vw;
-            /* Usa la variable CSS --vh para la altura real del viewport */
             height: calc(var(--vh, 1vh) * 100); 
         }
         
@@ -50,14 +49,16 @@
 
         /* CORRECCIÓN CRÍTICA 2: Forzar al elemento de video de la cámara a llenar el contenedor */
         a-scene video {
-            object-fit: cover !important; /* Asegura que el video llene el espacio sin distorsión */
+            object-fit: cover !important; 
             width: 100% !important;
             height: 100% !important;
-            transform: none !important; /* Desactiva transformaciones que podrían descentrarlo */
+            transform: none !important; 
             position: absolute !important; 
             top: 0 !important;
             left: 0 !important;
         }
+        /* --- FIN DE ESTILOS CRÍTICOS DE CENTRADO --- */
+
 
         /* 3. Overlay de inicio: Centrado perfecto sobre el espacio fijo */
         #start-overlay {
@@ -69,7 +70,6 @@
             background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
             
-            /* Centrado perfecto con flexbox */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -78,7 +78,7 @@
             padding: 20px;
         }
 
-        /* 4. Mensaje de estado en la parte inferior (se mantiene fijo) */
+        /* 4. Mensaje de estado en la parte inferior */
         #status-message {
             z-index: 100;
             position: fixed;
@@ -99,30 +99,30 @@
 
     <!-- Overlay de inicio -->
     <div id="start-overlay">
-        <h1 class="text-3xl font-bold text-white mb-6">Realidad Aumentada con Marcador Numérico</h1>
+        <h1 class="text-3xl font-bold text-white mb-6">Realidad Aumentada con Marcador PERSONALIZADO</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            Esta implementación usa el **marcador de código de barras 6** (Barcode Marker), que es estable y no depende de archivos externos.
+            El marcador se cargará desde su repositorio de GitHub. URL del patrón configurada.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
-            ⚠️ Necesitas un cuadrado con el número **6** (impreso o en otra pantalla) para que funcione.
+            ⚠️ Necesitas enfocar la **imagen de marcador personalizada** que subiste a GitHub para ver el astronauta.
         </p>
         
         <button 
             id="ar-button-start"
             onclick="initARJS()"
-            class="px-10 py-5 bg-teal-500 hover:bg-teal-600 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105"
+            class="px-10 py-5 bg-indigo-500 hover:bg-indigo-600 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105"
         >
             INICIAR CÁMARA Y RECONOCIMIENTO
         </button>
 
         <p class="mt-8 text-gray-400 text-xs font-semibold">
-            Patrón Objetivo: Barcode (Valor 6).
+            URL del patrón utilizada: raw.githubusercontent.com/Everestech/webar-placement/refs/heads/img/pattern-artarget.patt
         </p>
     </div>
 
     <!-- Mensaje de estado flotante -->
     <div id="status-message">
-        Esperando inicio...
+        Esperando URL del patrón...
     </div>
 
     <!-- Escena de A-Frame con AR.js -->
@@ -132,18 +132,20 @@
         vr-mode-ui="enabled: false" 
         renderer="logarithmicDepthBuffer: true;"
         style="display: none;"
-        arjs="sourceType: webcam; debugUIEnabled: false;"
+        
+        <!-- Configuración para un marcador de imagen (pattern) -->
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
     >
-        <!-- Marcador para el número 6 -->
+        <!-- Marcador de IMAGEN: Patrón Personalizado (URL INSERTADA) -->
         <a-marker 
-            type='barcode' 
-            value='6' 
+            type='pattern' 
+            url='https://raw.githubusercontent.com/Everestech/webar-placement/refs/heads/img/pattern-artarget.patt' 
             smooth="true" 
             smoothCount="10" 
             smoothThreshold="0.5" 
-            id="marker-barcode-6"
+            id="marker-custom"
         >
-            <!-- CORRECCIÓN 3D: Aumento de la escala del modelo a 0.5 para que sea visible -->
+            <!-- Modelo 3D: Astronauta con escala visible -->
             <a-entity 
                 gltf-model="url(https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb)"
                 scale="0.5 0.5 0.5" 
@@ -151,8 +153,8 @@
                 position="0 0 0.1" 
             ></a-entity>
 
-            <!-- Agregamos luces para que el modelo no se vea negro -->
-            <a-light type="ambient" color="#FFF"></a-light>
+            <!-- Luces para iluminar el modelo 3D -->
+            <a-light type="ambient" color="#FFF" intensity="0.5"></a-light>
             <a-light type="directional" position="0 1 0" color="#AAA" intensity="0.8"></a-light>
         </a-marker>
 
@@ -162,6 +164,7 @@
 
     <script>
         // --- Solución CRÍTICA para el problema de 100vh en móviles ---
+        // Calcula y establece la altura real del viewport (sin barras de navegación)
         function setVhProperty() {
             let vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -172,10 +175,11 @@
 
         // --- Inicialización de AR.js y Manejo de Eventos ---
         function initARJS() {
+            // La URL ya está configurada directamente en el HTML
             const overlayEl = document.getElementById('start-overlay');
             const sceneEl = document.getElementById('ar-scene');
             const statusMessage = document.getElementById('status-message');
-            const markerEl = document.getElementById('marker-barcode-6');
+            const markerEl = document.getElementById('marker-custom');
 
             // 1. Ocultar el overlay y mostrar la escena AR
             overlayEl.style.display = 'none';
@@ -185,28 +189,28 @@
 
             // 2. Escuchar el evento de inicialización de la cámara (propiedad de AR.js)
             sceneEl.addEventListener('arjs-video-loaded', function () {
-                setVhProperty(); // Doble verificación de la altura al cargar el video
-                statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de código de barras con el número 6!';
+                setVhProperty(); 
+                statusMessage.textContent = 'Cámara activa. ¡Busque su marcador personalizado!';
             });
             
             // 3. Escuchar la detección del marcador
             markerEl.addEventListener('markerFound', function() {
-                statusMessage.textContent = '¡MARCADOR 6 DETECTADO! Astronauta visible.';
-                statusMessage.style.backgroundColor = 'rgba(10, 207, 151, 0.9)'; // Teal brillante
-                console.log("Marcador 6 detectado y modelo 3D debería ser visible.");
+                statusMessage.textContent = '¡MARCADOR PERSONALIZADO DETECTADO! Astronauta visible.';
+                statusMessage.style.backgroundColor = 'rgba(168, 85, 247, 0.9)'; // Púrpura
+                console.log("Marcador detectado.");
             });
 
             markerEl.addEventListener('markerLost', function() {
-                statusMessage.textContent = 'Marcador perdido. Siga enfocando el cuadrado con el número 6.';
+                statusMessage.textContent = 'Marcador perdido. Siga enfocando su imagen.';
                 statusMessage.style.backgroundColor = 'rgba(22, 163, 74, 0.9)'; // Verde
             });
 
             // 4. En caso de fallo de la cámara
             sceneEl.addEventListener('arjs-error', function (err) {
                  statusMessage.innerHTML = `
-                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar la cámara o la AR. (Error: ${err.detail || 'Desconocido'}).
+                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar la cámara. (Error: ${err.detail || 'Desconocido'}).
                     <br>
-                    Verifique los permisos de su navegador y asegúrese de usar una conexión segura (HTTPS).
+                    Verifique los permisos de su navegador y use un entorno seguro (HTTPS).
                  `;
                  statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; // Rojo
             });
