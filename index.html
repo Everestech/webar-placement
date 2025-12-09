@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR - Realidad Aumentada - Polling Robusto</title>
+    <title>MindAR - AR con Chequeo Alternativo</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Librerías de AR (A-Frame 1.5.0 y MindAR 1.2.5) -->
+    <!-- ¡IMPORTANTE! Asegúrate de que estas URLs se cargan correctamente -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -71,9 +72,9 @@
 
     <!-- Overlay de inicio -->
     <div id="start-overlay">
-        <h1 class="text-3xl font-bold text-white mb-6">MindAR: Inicio con Sondeo Robusto</h1>
+        <h1 class="text-3xl font-bold text-white mb-6">MindAR: Chequeo de Carga Alternativo</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            Esperando la inicialización del sistema AR... El botón se habilitará automáticamente cuando esté listo.
+            Verificando la carga de MindAR... El botón se habilitará automáticamente cuando el script se haya cargado.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
             ⚠️ Marcador de prueba: Enfoque la imagen de la tarjeta de póker (Joker).
@@ -142,7 +143,7 @@
          * Función asíncrona para iniciar MindAR
          */
         async function startAR() {
-            // Deshabilitar botón para evitar reintentos y evitar doble click
+            // Deshabilitar botón para evitar reintentos 
             startButton.disabled = true;
             statusMessage.textContent = 'Iniciando proceso de cámara (esperando permisos)...';
 
@@ -150,30 +151,28 @@
             overlayEl.style.display = 'none';
             sceneEl.style.display = 'block';
 
+            // Dar un respiro para que el DOM se actualice
             await new Promise(resolve => setTimeout(resolve, 50)); 
             
+            // Requerir el sistema de la escena (ahora debe existir)
             const mindarSystem = sceneEl.systems['mindar-image'];
             
             if (!mindarSystem) {
-                 statusMessage.innerHTML = '⚠️ ERROR CRÍTICO POST-CLICK: Sistema MindAR no encontrado, no se puede iniciar.';
+                 statusMessage.innerHTML = '⚠️ ERROR CRÍTICO POST-CLICK: Sistema MindAR no encontrado, no se puede iniciar. El navegador lo bloqueó.';
                  statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
                  return;
             }
             
             try {
-                // LLAMADA ULTRA ROBUSTA: Usar el método start() del Sistema
+                // Iniciar el sistema MindAR
                 await mindarSystem.start(); 
                 
             } catch (error) {
-                // Si falla, proporcionar un diagnóstico detallado (generalmente permisos).
+                // Manejo de errores de inicio (típicamente permisos de cámara)
                 let errorMessage = `
                     ⚠️ ERROR DE CÁMARA/PERMISOS: Falló al iniciar el video.
                     <br>
-                    Esto puede ser: 
-                    <ul class="text-left mt-2 ml-4 list-disc text-sm font-normal">
-                        <li>Permiso de cámara denegado previamente.</li>
-                        <li>MindAR no compatible con el navegador/dispositivo.</li>
-                    </ul>
+                    Revise si su navegador ha bloqueado la cámara.
                 `;
                 statusMessage.innerHTML = errorMessage;
                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
@@ -181,37 +180,37 @@
             }
         }
 
-        // --- Mecanismo de Sondeo (Polling) Robusto ---
-        const MAX_CHECKS = 10; // Intentar durante 5 segundos (10 * 500ms)
-        let checks = 0;
+        // --- Lógica de Verificación Alternativa y Simple ---
+        
+        function checkMindARComponent() {
+            // Chequea si AFRAME existe y si el componente 'mindar-image' ha sido definido
+            const isMindARLoaded = typeof AFRAME !== 'undefined' && typeof AFRAME.components['mindar-image'] !== 'undefined';
 
-        function checkAndEnableButton() {
-            // Si la escena no tiene A-Frame completamente inicializado, 'systems' será undefined o incompleto.
-            const mindarSystem = sceneEl.systems && sceneEl.systems['mindar-image'];
-
-            if (mindarSystem) {
-                // 1. Éxito: El sistema está listo.
+            if (isMindARLoaded) {
+                // Éxito: La definición básica del componente existe.
                 statusMessage.textContent = 'Sistema AR detectado. Presione INICIAR CÁMARA.';
                 startButton.disabled = false;
-                console.log("MindAR System Check: ¡Detectado con éxito!");
-            } else if (checks < MAX_CHECKS) {
-                // 2. Esperar: El sistema aún no está listo, pero quedan intentos.
-                statusMessage.textContent = `Buscando sistema AR... (Intento ${checks + 1} de ${MAX_CHECKS})`;
-                checks++;
-                setTimeout(checkAndEnableButton, 500); // Reintentar después de 500ms
+                console.log("MindAR Component Check: ¡Detectado con éxito!");
             } else {
-                // 3. Fallo: Máximo de intentos alcanzado.
-                statusMessage.innerHTML = '⚠️ ERROR CRÍTICO (T-O): El Sistema MindAR NO está disponible. El script falló al registrarse en 5 segundos. Intente recargar la página.';
+                // Fallo: El script no se ejecutó o fue bloqueado.
+                statusMessage.innerHTML = '⚠️ ERROR FATAL: MindAR no se cargó. Posiblemente un bloqueo de red o problema de compatibilidad.';
                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
-                console.error("Error: MindAR Image System not found after multiple checks.");
+                console.error("Error: MindAR component definition not found in AFRAME.");
             }
         }
 
-        // --- Oyentes de Eventos MindAR/A-Frame para feedback ---
-        
-        // Inicia el sondeo cuando A-Frame confirma que la escena y sus componentes están listos.
-        sceneEl.addEventListener('loaded', checkAndEnableButton);
+        // 1. Adjuntar la función de inicio al botón
+        startButton.addEventListener('click', startAR);
 
+        // 2. Iniciar la verificación después de que el DOM esté completamente cargado.
+        document.addEventListener('DOMContentLoaded', () => {
+             statusMessage.textContent = 'Esperando la definición de MindAR...';
+             // Damos 1000ms de gracia para que todos los <script> se ejecuten
+             setTimeout(checkMindARComponent, 1000); 
+        });
+
+
+        // --- Oyentes de Eventos MindAR/A-Frame para feedback ---
         sceneEl.addEventListener('mindar-start', function() {
             statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de la tarjeta!';
             statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)';
@@ -226,14 +225,6 @@
         targetEl.addEventListener('targetLost', function() {
             statusMessage.textContent = 'Marcador perdido. Siga enfocando la tarjeta.';
             statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)';
-        });
-        
-        // 4. Adjuntar la función de inicio al botón
-        startButton.addEventListener('click', startAR);
-
-        // Mensaje inicial
-        document.addEventListener('DOMContentLoaded', () => {
-             statusMessage.textContent = 'Cargando A-Frame y MindAR...';
         });
     </script>
 </body>
