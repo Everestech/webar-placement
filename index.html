@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR - Realidad Aumentada - Inicio ULTRA Robusto</title>
+    <title>MindAR - Realidad Aumentada - Sincronizado</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -71,9 +71,9 @@
 
     <!-- Overlay de inicio -->
     <div id="start-overlay">
-        <h1 class="text-3xl font-bold text-white mb-6">MindAR: Reinicio de Cámara con System API</h1>
+        <h1 class="text-3xl font-bold text-white mb-6">MindAR: Inicio Sincronizado</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            Esta versión usa la API más robusta de A-Frame para asegurar la correcta solicitud de permisos al tocar el botón.
+            El botón se habilitará solo cuando el sistema AR esté 100% listo para evitar errores de inicialización.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
             ⚠️ Marcador de prueba: Enfoque la imagen de la tarjeta de póker (Joker).
@@ -90,14 +90,15 @@
 
     <!-- Mensaje de estado flotante -->
     <div id="status-message">
-        Cargando A-Frame y MindAR...
+        Cargando librerías...
     </div>
 
     <!-- Escena de A-Frame con MindAR -->
-    <!-- autoStart: false es CRÍTICO para el control manual -->
+    <!-- Se añade el nuevo componente 'mindar-readiness-check' -->
     <a-scene 
         id="ar-scene"
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;"
+        mindar-readiness-check
         color-space="sRGB" 
         renderer="colorManagement: true, physicallyCorrectLights: true"
         vr-mode-ui="enabled: false" 
@@ -132,11 +133,34 @@
     </a-scene>
 
     <script>
+        // Obtener referencias a elementos del DOM
         const sceneEl = document.getElementById('ar-scene');
         const statusMessage = document.getElementById('status-message');
         const overlayEl = document.getElementById('start-overlay');
         const targetEl = document.getElementById('mindar-target');
         const startButton = document.getElementById('ar-button-start');
+
+        /**
+         * Componente de A-Frame para verificar la disponibilidad del Sistema MindAR.
+         * Esto garantiza que la lógica de inicio solo se ejecute cuando A-Frame haya
+         * cargado todos los sistemas.
+         */
+        AFRAME.registerComponent('mindar-readiness-check', {
+            init: function () {
+                const mindarSystem = this.el.systems['mindar-image'];
+                
+                if (mindarSystem) {
+                    // El sistema existe: todo está listo, habilitar la UI.
+                    statusMessage.textContent = 'Sistema AR cargado. Presione INICIAR CÁMARA.';
+                    startButton.disabled = false;
+                } else {
+                    // El sistema NO existe: algo falló en la carga del script.
+                    statusMessage.innerHTML = '⚠️ ERROR FATAL: El Sistema MindAR NO está disponible. Verifique que el script de MindAR se haya cargado correctamente.';
+                    statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
+                    console.error("Error: MindAR Image System not found in A-Frame systems.");
+                }
+            }
+        });
 
         /**
          * Función asíncrona para iniciar MindAR
@@ -150,17 +174,16 @@
             overlayEl.style.display = 'none';
             sceneEl.style.display = 'block';
 
-            // Damos un tiempo extra para que el navegador reaccione al cambio de display
+            // Dar un pequeño respiro al DOM para que el cambio de display sea efectivo
             await new Promise(resolve => setTimeout(resolve, 50)); 
             
             const mindarSystem = sceneEl.systems['mindar-image'];
             
+            // Este chequeo ya fue hecho por el componente, pero lo repetimos por seguridad
             if (!mindarSystem) {
-                // Este error es crítico, el sistema no se adjuntó.
-                statusMessage.innerHTML = '⚠️ ERROR FATAL: El Sistema MindAR no está disponible. Verifique la carga del script.';
-                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
-                startButton.disabled = false;
-                return;
+                 statusMessage.innerHTML = '⚠️ ERROR CRÍTICO POST-CLICK: Sistema MindAR no encontrado.';
+                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
+                 return;
             }
             
             try {
@@ -168,31 +191,21 @@
                 await mindarSystem.start(); 
                 
             } catch (error) {
-                // Si falla, proporcionar un diagnóstico detallado.
+                // Si falla, proporcionar un diagnóstico detallado (generalmente permisos).
                 let errorMessage = `
                     ⚠️ ERROR CRÍTICO: Falló al iniciar la cámara.
                     <br>
-                    Esto suele ser un bloqueo de permisos. Por favor, revise:
-                    <ul class="text-left mt-2 ml-4 list-disc text-sm font-normal">
-                        <li>**Permisos del sitio:** Vaya a la configuración del navegador y asegúrese de que la cámara no está bloqueada para esta URL.</li>
-                        <li>**Conexión:** Está en HTTPS (confirmado).</li>
-                        <li>**Dispositivo:** Pruebe en otro navegador o dispositivo si es posible, ya que algunos navegadores tienen reglas de seguridad muy estrictas.</li>
-                    </ul>
+                    Esto suele ser un bloqueo de permisos. Revise la configuración de su navegador para la URL ${window.location.host}.
                 `;
                 statusMessage.innerHTML = errorMessage;
                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
                 console.error("MindAR System Start Error:", error);
-                // No habilitamos el botón, ya que un reintento tiene bajas probabilidades de éxito sin cambiar la configuración del navegador.
+                // Si falla, no re-habilitamos el botón para evitar spam de clics inútil.
             }
         }
 
-        // 1. Configuración de oyentes de A-Frame y DOM
-        sceneEl.addEventListener('loaded', () => {
-            statusMessage.textContent = 'Escena AR y activos cargados. Presione INICIAR.';
-            // Habilitar el botón SÓLO cuando A-Frame está listo.
-            startButton.disabled = false;
-        });
-
+        // --- Oyentes de Eventos MindAR/A-Frame para feedback ---
+        
         sceneEl.addEventListener('mindar-start', function() {
             statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de la tarjeta!';
             statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)';
@@ -214,8 +227,8 @@
 
         // Mensaje inicial de carga
         document.addEventListener('DOMContentLoaded', () => {
-             // El botón se deshabilita por defecto en el HTML y se habilita en el 'loaded' de A-Frame
-             statusMessage.textContent = 'Cargando A-Frame y MindAR... Espere un momento.';
+             // El componente 'mindar-readiness-check' actualizará el estado
+             statusMessage.textContent = 'Esperando inicialización de A-Frame y MindAR...';
         });
     </script>
 </body>
