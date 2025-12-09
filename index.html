@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR - Realidad Aumentada con Marcador V2</title>
+    <title>MindAR - Realidad Aumentada con Marcador V3 (Cámara Fix)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Librerías de AR (A-Frame 1.5.0 y MindAR 1.2.5) - ENLACES ACTUALIZADOS -->
+    <!-- Librerías de AR (A-Frame 1.5.0 y MindAR 1.2.5) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -73,7 +73,7 @@
     <div id="start-overlay">
         <h1 class="text-3xl font-bold text-white mb-6">MindAR: Prueba con Activos Actualizados</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            Hemos integrado las URLs de librerías y activos (Assets) de tu código de ejemplo.
+            Hemos corregido la inicialización para asegurar que se soliciten los permisos de cámara.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
             ⚠️ Marcador de prueba: Enfoque la imagen de la tarjeta de póker (Joker).
@@ -81,7 +81,6 @@
         
         <button 
             id="ar-button-start"
-            onclick="initMindAR()"
             class="px-10 py-5 bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105"
         >
             INICIAR CÁMARA Y AR
@@ -90,10 +89,11 @@
 
     <!-- Mensaje de estado flotante -->
     <div id="status-message">
-        Listo para iniciar...
+        Cargando la escena AR...
     </div>
 
     <!-- Escena de A-Frame con MindAR -->
+    <!-- CRÍTICO: Mantenemos autoStart: false para control manual -->
     <a-scene 
         id="ar-scene"
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;"
@@ -105,9 +105,7 @@
     >
         <!-- DEFINICIÓN DE ASSETS (IMAGEN Y MODELO 3D) -->
         <a-assets>
-            <!-- Imagen del marcador (opcional, solo para visualización) -->
             <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" crossorigin="anonymous"/>
-            <!-- Modelo 3D (el avatar Softmind) -->
             <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf" crossorigin="anonymous"></a-asset-item>
         </a-assets>
 
@@ -117,7 +115,7 @@
         <!-- Marcador de IMAGEN: Target 0 (la tarjeta de póker) -->
         <a-entity mindar-image-target="targetIndex: 0" id="mindar-target">
             
-            <!-- (Opcional) Plano para visualizar la imagen del marcador, útil para debug -->
+            <!-- Plano para visualizar la imagen del marcador, útil para debug -->
             <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
 
             <!-- Modelo 3D con animación, usando los assets del ejemplo -->
@@ -137,36 +135,63 @@
         const statusMessage = document.getElementById('status-message');
         const overlayEl = document.getElementById('start-overlay');
         const targetEl = document.getElementById('mindar-target');
+        const startButton = document.getElementById('ar-button-start');
 
-        function initMindAR() {
+        /**
+         * Función asíncrona para iniciar MindAR usando la API del componente.
+         * Esto garantiza que la solicitud de cámara ocurra dentro de un contexto de
+         * interacción de usuario, lo cual es necesario para los navegadores modernos.
+         */
+        async function startAR() {
             // Ocultar overlay y mostrar la escena AR
             overlayEl.style.display = 'none';
             sceneEl.style.display = 'block';
-
             statusMessage.textContent = 'Solicitando permisos de cámara...';
-            
-            // Iniciar MindAR manualmente
-            // Esto es crucial para que MindAR pida permisos después de la interacción del usuario
-            sceneEl.setAttribute('mindar-image', 'autoStart: true'); 
 
-            // Escuchar eventos de MindAR
+            const mindarComponent = sceneEl.components['mindar-image'];
+            
+            // Verificación de seguridad
+            if (!mindarComponent) {
+                statusMessage.innerHTML = 'Error: Componente MindAR no cargado. Intente recargar.';
+                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
+                console.error("MindAR Component not found.");
+                return;
+            }
+            
+            try {
+                // LLAMADA CLAVE: Usar el método start() del componente
+                await mindarComponent.start(); 
+            } catch (error) {
+                // Manejo de error si la cámara falla (p. ej., permisos denegados)
+                statusMessage.innerHTML = `
+                    ⚠️ **ERROR CRÍTICO:** Falló al iniciar la cámara.
+                    <br>
+                    Revise los permisos del navegador o use una conexión HTTPS.
+                `;
+                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
+                console.error("MindAR Start Error:", error);
+            }
+        }
+
+        // 1. Esperar a que toda la escena de A-Frame esté cargada
+        sceneEl.addEventListener('loaded', () => {
+            statusMessage.textContent = 'Escena AR cargada. Presione INICIAR.';
+            
+            // 2. Adjuntar la función de inicio al botón después de que todo esté listo
+            startButton.onclick = startAR;
+            
+            // 3. Configurar los oyentes de eventos de AR
             sceneEl.addEventListener('mindar-start', function() {
                 statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de la tarjeta!';
                 statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)'; // Cian
-                console.log("MindAR iniciado con éxito y activos cargados.");
+                console.log("MindAR iniciado con éxito.");
             });
 
             sceneEl.addEventListener('mindar-error', function(err) {
-                statusMessage.innerHTML = `
-                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar MindAR.
-                    <br>
-                    Verifique los permisos de cámara y asegúrese de usar HTTPS.
-                `;
-                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; // Rojo
-                console.error("MindAR Error:", err);
+                // Este listener captura errores tardíos
+                console.error("MindAR Error durante la ejecución:", err);
             });
-
-            // Escuchar la detección y pérdida del marcador
+            
             targetEl.addEventListener('targetFound', function() {
                 statusMessage.textContent = '¡MARCADOR DETECTADO! Modelo 3D visible.';
                 statusMessage.style.backgroundColor = 'rgba(168, 85, 247, 0.9)'; // Púrpura
@@ -176,7 +201,15 @@
                 statusMessage.textContent = 'Marcador perdido. Siga enfocando la tarjeta.';
                 statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)'; // Cian
             });
-        }
+        });
+
+        // Manejo de la carga inicial
+        document.addEventListener('DOMContentLoaded', () => {
+             // Opcional: mostrar un mensaje mientras A-Frame está inicializando
+             if (sceneEl.readyState < 4) {
+                 statusMessage.textContent = 'Cargando A-Frame y MindAR...';
+             }
+        });
     </script>
 </body>
 </html>
