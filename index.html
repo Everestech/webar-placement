@@ -3,68 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR.js: Marcador Personalizado Ultra Estable</title>
+    <title>MindAR - Realidad Aumentada con Marcador V2</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Librerías de AR (A-Frame y AR.js) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <!-- Librerías de AR (A-Frame 1.5.0 y MindAR 1.2.5) - ENLACES ACTUALIZADOS -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-        /* --- CORRECCIÓN CRÍTICA DE CSS PARA FULLSCREEN EN MÓVILES --- */
-        
-        /* 1. Definición de la variable custom para corregir el 100vh */
-        :root {
-            --vh: 1vh;
-        }
-
-        /* 2. Body: Fijo y usando la altura corregida */
-        body { 
+        /* Estilos generales para asegurar el viewport completo */
+        html, body { 
             margin: 0; 
             padding: 0; 
             font-family: 'Inter', sans-serif; 
             overflow: hidden; 
             background-color: black;
-            position: fixed; 
-            top: 0;
-            left: 0;
             width: 100vw;
-            height: calc(var(--vh, 1vh) * 100); 
+            height: 100vh;
         }
         
-        /* 3. a-scene: Debe ocupar exactamente el mismo espacio que el body */
         a-scene {
             position: fixed !important; 
             top: 0 !important; 
             left: 0 !important;
-            width: 100vw !important;
-            height: calc(var(--vh, 1vh) * 100) !important; 
-        }
-
-        /* 4. Canvas y Video: Usar reglas absolutas y cover para llenar el espacio */
-        a-scene .a-canvas, 
-        a-scene video {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
             width: 100% !important;
-            height: 100% !important;
-            object-fit: cover !important; /* Esencial para que el video llene el espacio sin distorsión */
-            transform: none !important; 
-            z-index: 0 !important;
+            height: 100% !important; 
+            z-index: 10;
         }
-        /* --- FIN DE ESTILOS CRÍTICOS --- */
 
-
-        /* Overlay de inicio y mensaje de estado (solo estilos visuales) */
+        /* Overlay de inicio (para gestionar permisos) */
         #start-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
-            height: calc(var(--vh, 1vh) * 100); 
+            height: 100%; 
             background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
             display: flex;
@@ -75,12 +50,13 @@
             padding: 20px;
         }
 
+        /* Mensaje de estado para feedback al usuario */
         #status-message {
-            z-index: 100;
+            z-index: 1000;
             position: fixed;
             bottom: 0;
             width: 100%;
-            background-color: rgba(22, 163, 74, 0.9);
+            background-color: rgba(6, 182, 212, 0.9);
             color: white;
             padding: 1rem;
             text-align: center;
@@ -95,124 +71,110 @@
 
     <!-- Overlay de inicio -->
     <div id="start-overlay">
-        <h1 class="text-3xl font-bold text-white mb-6">Realidad Aumentada con Marcador PERSONALIZADO</h1>
+        <h1 class="text-3xl font-bold text-white mb-6">MindAR: Prueba con Activos Actualizados</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            Esta versión es la más estable para la detección de marcadores de imagen (AR.js).
+            Hemos integrado las URLs de librerías y activos (Assets) de tu código de ejemplo.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
-            ⚠️ Enfoca la imagen que utilizaste para generar el archivo patrón en la URL de GitHub.
+            ⚠️ Marcador de prueba: Enfoque la imagen de la tarjeta de póker (Joker).
         </p>
         
         <button 
             id="ar-button-start"
-            onclick="initARJS()"
-            class="px-10 py-5 bg-indigo-500 hover:bg-indigo-600 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105"
+            onclick="initMindAR()"
+            class="px-10 py-5 bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105"
         >
-            INICIAR CÁMARA Y RECONOCIMIENTO
+            INICIAR CÁMARA Y AR
         </button>
-
-        <p class="mt-8 text-gray-400 text-xs font-semibold">
-            URL del patrón: https://raw.githubusercontent.com/Everestech/webar-placement/refs/heads/img/pattern-artarget.patt
-        </p>
     </div>
 
     <!-- Mensaje de estado flotante -->
     <div id="status-message">
-        Esperando inicialización...
+        Listo para iniciar...
     </div>
 
-    <!-- Escena de A-Frame con AR.js -->
+    <!-- Escena de A-Frame con MindAR -->
     <a-scene 
-        embedded 
         id="ar-scene"
+        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;"
+        color-space="sRGB" 
+        renderer="colorManagement: true, physicallyCorrectLights: true"
         vr-mode-ui="enabled: false" 
-        renderer="logarithmicDepthBuffer: true; antialias: true;"
+        device-orientation-permission-ui="enabled: false"
         style="display: none;"
-        
-        <!-- Configuración para un marcador de imagen (pattern) -->
-        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; cameraParametersUrl: https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/camera-parameters.zip;"
     >
-        <!-- Marcador de IMAGEN: Patrón Personalizado (URL INSERTADA) -->
-        <a-marker 
-            type='pattern' 
-            url='https://raw.githubusercontent.com/Everestech/webar-placement/refs/heads/img/pattern-artarget.patt' 
-            smooth="true" 
-            smoothCount="10" 
-            smoothThreshold="0.5" 
-            id="marker-custom"
-        >
-            <!-- Modelo 3D: Astronauta con escala visible -->
-            <a-entity 
-                gltf-model="url(https://modelviewer.dev/shared-assets/models/NeilArmstrong.glb)"
-                scale="0.5 0.5 0.5" 
-                rotation="0 0 0"
+        <!-- DEFINICIÓN DE ASSETS (IMAGEN Y MODELO 3D) -->
+        <a-assets>
+            <!-- Imagen del marcador (opcional, solo para visualización) -->
+            <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" crossorigin="anonymous"/>
+            <!-- Modelo 3D (el avatar Softmind) -->
+            <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf" crossorigin="anonymous"></a-asset-item>
+        </a-assets>
+
+        <!-- CRÍTICO: Definición de la cámara MindAR -->
+        <a-camera mindar-image-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- Marcador de IMAGEN: Target 0 (la tarjeta de póker) -->
+        <a-entity mindar-image-target="targetIndex: 0" id="mindar-target">
+            
+            <!-- (Opcional) Plano para visualizar la imagen del marcador, útil para debug -->
+            <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
+
+            <!-- Modelo 3D con animación, usando los assets del ejemplo -->
+            <a-gltf-model 
+                rotation="0 0 0 " 
                 position="0 0 0.1" 
-                animation-mixer
-            ></a-entity>
+                scale="0.005 0.005 0.005" 
+                src="#avatarModel"
+                animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate"
+            ></a-gltf-model>
 
-            <!-- Luces para iluminar el modelo 3D -->
-            <a-light type="ambient" color="#FFF" intensity="0.5"></a-light>
-            <a-light type="directional" position="0 1 0" color="#AAA" intensity="0.8"></a-light>
-        </a-marker>
-
-        <!-- Componente nativo de cámara de A-Frame -->
-        <a-entity camera></a-entity>
+        </a-entity>
     </a-scene>
 
     <script>
-        // --- Solución CRÍTICA para el problema de 100vh en móviles (viewport fix) ---
-        // Calcula y establece la altura real del viewport, corrigiendo el error de las barras de navegación.
-        function setVhProperty() {
-            let vh = window.innerHeight * 0.01;
-            document.documentElement.style.setProperty('--vh', `${vh}px`);
-        }
-        
-        // Inicializa y escucha los cambios de tamaño
-        setVhProperty();
-        window.addEventListener('resize', setVhProperty);
-        
-        // --- Inicialización de AR.js y Manejo de Eventos ---
-        function initARJS() {
-            const overlayEl = document.getElementById('start-overlay');
-            const sceneEl = document.getElementById('ar-scene');
-            const statusMessage = document.getElementById('status-message');
-            const markerEl = document.getElementById('marker-custom');
+        const sceneEl = document.getElementById('ar-scene');
+        const statusMessage = document.getElementById('status-message');
+        const overlayEl = document.getElementById('start-overlay');
+        const targetEl = document.getElementById('mindar-target');
 
-            // 1. Ocultar el overlay y mostrar la escena AR
+        function initMindAR() {
+            // Ocultar overlay y mostrar la escena AR
             overlayEl.style.display = 'none';
             sceneEl.style.display = 'block';
 
             statusMessage.textContent = 'Solicitando permisos de cámara...';
-
-            // 2. Escuchar el evento de inicialización de la cámara (arjs-video-loaded)
-            sceneEl.addEventListener('arjs-video-loaded', function () {
-                // Re-ejecutar el fix de CSS y viewport después de que el video carga.
-                setVhProperty(); 
-                statusMessage.textContent = 'Cámara activa. ¡Busque su marcador personalizado!';
-                
-                // Forzar un resize de A-Frame/AR.js (truco de estabilidad)
-                window.dispatchEvent(new Event('resize')); 
-            });
             
-            // 3. Escuchar la detección del marcador
-            markerEl.addEventListener('markerFound', function() {
-                statusMessage.textContent = '¡MARCADOR PERSONALIZADO DETECTADO! Astronauta visible.';
+            // Iniciar MindAR manualmente
+            // Esto es crucial para que MindAR pida permisos después de la interacción del usuario
+            sceneEl.setAttribute('mindar-image', 'autoStart: true'); 
+
+            // Escuchar eventos de MindAR
+            sceneEl.addEventListener('mindar-start', function() {
+                statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de la tarjeta!';
+                statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)'; // Cian
+                console.log("MindAR iniciado con éxito y activos cargados.");
+            });
+
+            sceneEl.addEventListener('mindar-error', function(err) {
+                statusMessage.innerHTML = `
+                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar MindAR.
+                    <br>
+                    Verifique los permisos de cámara y asegúrese de usar HTTPS.
+                `;
+                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; // Rojo
+                console.error("MindAR Error:", err);
+            });
+
+            // Escuchar la detección y pérdida del marcador
+            targetEl.addEventListener('targetFound', function() {
+                statusMessage.textContent = '¡MARCADOR DETECTADO! Modelo 3D visible.';
                 statusMessage.style.backgroundColor = 'rgba(168, 85, 247, 0.9)'; // Púrpura
             });
 
-            markerEl.addEventListener('markerLost', function() {
-                statusMessage.textContent = 'Marcador perdido. Siga enfocando su imagen.';
-                statusMessage.style.backgroundColor = 'rgba(22, 163, 74, 0.9)'; // Verde
-            });
-
-            // 4. En caso de fallo de la cámara
-            sceneEl.addEventListener('arjs-error', function (err) {
-                 statusMessage.innerHTML = `
-                    ⚠️ **ERROR CRÍTICO:** No se pudo iniciar la cámara.
-                    <br>
-                    Verifique permisos o use un entorno seguro (HTTPS).
-                 `;
-                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; // Rojo
+            targetEl.addEventListener('targetLost', function() {
+                statusMessage.textContent = 'Marcador perdido. Siga enfocando la tarjeta.';
+                statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)'; // Cian
             });
         }
     </script>
