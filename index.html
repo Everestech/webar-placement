@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR - Solución de Fondo Negro (Alpha)</title>
+    <title>MindAR - Solución de Fondo Negro (Final Fix)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -24,14 +24,16 @@
             height: 100vh;
         }
         
-        /* La escena A-Frame siempre está en el fondo y ocupa todo el espacio. */
+        /* La escena A-Frame (el canvas) debe tener un z-index más alto que el video, pero ser transparente. */
         a-scene {
             position: fixed !important; 
             top: 0 !important; 
             left: 0 !important;
             width: 100% !important;
             height: 100% !important; 
-            z-index: 10;
+            z-index: 10; /* Asegura que los modelos 3D se dibujen sobre el video */
+            /* Opcional: Forzar que el canvas sea completamente transparente */
+            background-color: transparent !important;
         }
 
         /* Overlay de inicio (Cubre la escena hasta que se haga clic) */
@@ -82,6 +84,9 @@
         
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false"
+        
+        <!-- CRÍTICO: Añadimos el nuevo componente para arreglar el fondo de video -->
+        mindar-video-hack 
     >
         <a-assets>
             <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" crossorigin="anonymous"/>
@@ -147,6 +152,40 @@
     </div>
 
     <script>
+        // CRÍTICO: Componente A-Frame para asegurar la visibilidad del video de la cámara
+        AFRAME.registerComponent('mindar-video-hack', {
+            init: function () {
+                const sceneEl = this.el;
+                
+                // Escuchar el evento que indica que MindAR ha comenzado a inicializar el video
+                sceneEl.addEventListener('mindar-start', () => {
+                    // El elemento de video es creado por MindAR directamente en el <body>
+                    const videoElement = document.querySelector('video');
+
+                    if (videoElement) {
+                        // Aplicar estilos críticos para asegurar que cubra el fondo y sea visible
+                        videoElement.style.position = 'fixed';
+                        videoElement.style.top = '0';
+                        videoElement.style.left = '0';
+                        videoElement.style.width = '100vw';
+                        videoElement.style.height = '100vh';
+                        videoElement.style.objectFit = 'cover'; // Asegura que cubra todo sin distorsión
+                        videoElement.style.zIndex = '5'; // CRÍTICO: Debe estar detrás de la a-scene (z-index: 10)
+                        
+                        // Forzar la transparencia del canvas de A-Frame (a veces es necesario un extra)
+                        const canvas = sceneEl.querySelector('canvas');
+                        if (canvas) {
+                            canvas.style.backgroundColor = 'transparent';
+                        }
+                        
+                        console.log("MindAR Video Element found and styled correctly.");
+                    } else {
+                        console.warn("Could not find MindAR video element for styling hack.");
+                    }
+                });
+            }
+        });
+        
         // Obtener referencias a elementos del DOM
         const sceneEl = document.getElementById('ar-scene');
         const statusMessage = document.getElementById('status-message');
