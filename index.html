@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR - Solución de Fondo Negro (Final Fix)</title>
+    <title>MindAR - Solución de Inicialización (Auto-Start)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -32,7 +32,6 @@
             width: 100% !important;
             height: 100% !important; 
             z-index: 10; /* Asegura que los modelos 3D se dibujen sobre el video */
-            /* Opcional: Forzar que el canvas sea completamente transparente */
             background-color: transparent !important;
         }
 
@@ -73,19 +72,60 @@
 </head>
 <body class="overflow-hidden">
 
+    <!-- Componente de A-Frame para el "Video Hack" -->
+    <script>
+        // Componente A-Frame para asegurar la visibilidad del video de la cámara
+        // Esto es esencial si MindAR no logra estilizar correctamente el elemento <video> que crea.
+        AFRAME.registerComponent('mindar-video-hack', {
+            init: function () {
+                const sceneEl = this.el;
+                
+                // Escuchar el evento que indica que MindAR ha comenzado a inicializar el video
+                sceneEl.addEventListener('mindar-start', () => {
+                    // El elemento de video es creado por MindAR directamente en el <body>
+                    const videoElement = document.querySelector('video');
+
+                    if (videoElement) {
+                        // Aplicar estilos críticos para asegurar que cubra el fondo y sea visible
+                        videoElement.style.position = 'fixed';
+                        videoElement.style.top = '0';
+                        videoElement.style.left = '0';
+                        videoElement.style.width = '100vw';
+                        videoElement.style.height = '100vh';
+                        videoElement.style.objectFit = 'cover'; // Asegura que cubra todo sin distorsión
+                        videoElement.style.zIndex = '5'; // CRÍTICO: Debe estar detrás de la a-scene (z-index: 10)
+                        
+                        // Forzar la transparencia del canvas de A-Frame (a veces es necesario un extra)
+                        const canvas = sceneEl.querySelector('canvas');
+                        if (canvas) {
+                            canvas.style.backgroundColor = 'transparent';
+                        }
+                        
+                        console.log("MindAR Video Element found and styled correctly.");
+                    } else {
+                        console.warn("Could not find MindAR video element for styling hack.");
+                    }
+                });
+            }
+        });
+    </script>
+
     <!-- Escena de A-Frame con MindAR -->
     <a-scene 
         id="ar-scene"
-        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;"
+        
+        <!-- CRÍTICO: Eliminamos autoStart: false para que MindAR intente iniciarse inmediatamente como en el ejemplo oficial -->
+        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;"
+        
         color-space="sRGB" 
         
-        <!-- CRÍTICO: Configuración del renderer con alpha: true para transparencia -->
+        <!-- CRÍTICO: renderer con alpha: true para transparencia -->
         renderer="alpha: true, colorManagement: true, physicallyCorrectLights: true"
         
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false"
         
-        <!-- CRÍTICO: Añadimos el nuevo componente para arreglar el fondo de video -->
+        <!-- CRÍTICO: Mantenemos el hack de estilos -->
         mindar-video-hack 
     >
         <a-assets>
@@ -131,7 +171,7 @@
     <div id="start-overlay">
         <h1 class="text-3xl font-bold text-white mb-6">MindAR - Realidad Aumentada</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            La escena AR está lista. Presiona el botón para iniciar la cámara y ver el entorno real.
+            El motor AR está cargado. Presiona el botón para desbloquear el video de la cámara y comenzar la detección.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
             ⚠️ Marcador de prueba: Enfoque la imagen de la tarjeta de póker (Joker).
@@ -139,8 +179,7 @@
         
         <button 
             id="ar-button-start"
-            class="px-10 py-5 bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105 rounded-xl disabled:opacity-50"
-            disabled
+            class="px-10 py-5 bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105 rounded-xl"
         >
             INICIAR CÁMARA Y AR
         </button>
@@ -148,44 +187,10 @@
 
     <!-- Mensaje de estado flotante -->
     <div id="status-message">
-        Cargando motor AR...
+        Listo para iniciar.
     </div>
 
     <script>
-        // CRÍTICO: Componente A-Frame para asegurar la visibilidad del video de la cámara
-        AFRAME.registerComponent('mindar-video-hack', {
-            init: function () {
-                const sceneEl = this.el;
-                
-                // Escuchar el evento que indica que MindAR ha comenzado a inicializar el video
-                sceneEl.addEventListener('mindar-start', () => {
-                    // El elemento de video es creado por MindAR directamente en el <body>
-                    const videoElement = document.querySelector('video');
-
-                    if (videoElement) {
-                        // Aplicar estilos críticos para asegurar que cubra el fondo y sea visible
-                        videoElement.style.position = 'fixed';
-                        videoElement.style.top = '0';
-                        videoElement.style.left = '0';
-                        videoElement.style.width = '100vw';
-                        videoElement.style.height = '100vh';
-                        videoElement.style.objectFit = 'cover'; // Asegura que cubra todo sin distorsión
-                        videoElement.style.zIndex = '5'; // CRÍTICO: Debe estar detrás de la a-scene (z-index: 10)
-                        
-                        // Forzar la transparencia del canvas de A-Frame (a veces es necesario un extra)
-                        const canvas = sceneEl.querySelector('canvas');
-                        if (canvas) {
-                            canvas.style.backgroundColor = 'transparent';
-                        }
-                        
-                        console.log("MindAR Video Element found and styled correctly.");
-                    } else {
-                        console.warn("Could not find MindAR video element for styling hack.");
-                    }
-                });
-            }
-        });
-        
         // Obtener referencias a elementos del DOM
         const sceneEl = document.getElementById('ar-scene');
         const statusMessage = document.getElementById('status-message');
@@ -194,82 +199,41 @@
         const startButton = document.getElementById('ar-button-start');
         const examplePlane = document.getElementById('example-plane');
         
-        let arSystem = null;
-
+        
         /**
-         * Función asíncrona para iniciar MindAR, llamada al hacer clic.
+         * Función para desbloquear el video y revelar la escena.
+         * En este nuevo método, el motor MindAR ya está intentando iniciar. 
+         * Solo necesitamos el gesto del usuario para desbloquearlo.
          */
-        async function startAR() {
-            if (!arSystem) {
-                statusMessage.innerHTML = '⚠️ ERROR CRÍTICO: El sistema AR no se cargó. Recarga la página.';
-                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
-                return;
-            }
+        function startAR() {
+            // Ocultamos el overlay inmediatamente después del clic del usuario.
+            overlayEl.style.opacity = '0';
+            setTimeout(() => {
+                overlayEl.style.display = 'none';
+                
+                // Si la cámara aún no ha pedido permisos, el navegador lo hará ahora 
+                // ya que hemos permitido el "playback" de la escena.
+            }, 500); 
 
+            // Actualizar estado
+            statusMessage.textContent = 'Cámara iniciándose...';
+            statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)';
             startButton.disabled = true;
-            statusMessage.textContent = 'Iniciando proceso de cámara (solicitando permisos)...';
-
-            try {
-                // 1. Llamada a la API de inicio del sistema AR (solicita permisos de cámara)
-                await arSystem.start(); 
-
-                // 2. Si el inicio es exitoso, OCULTAMOS el overlay.
-                // Esto revela la escena A-Frame, que ahora tiene el stream de video.
-                overlayEl.style.opacity = '0';
-                setTimeout(() => {
-                    overlayEl.style.display = 'none';
-                }, 500); // Esperar la transición de opacidad
-                
-            } catch (error) {
-                // Manejo de errores (permisos denegados, hardware no disponible)
-                let errorMessage = `
-                    ⚠️ ERROR DE CÁMARA/PERMISOS: Falló al iniciar el video.
-                    <br>
-                    Verifique que el permiso de cámara no esté denegado para esta página.
-                `;
-                statusMessage.innerHTML = errorMessage;
-                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
-                console.error("MindAR System Start Error:", error);
-                
-                // Si falla, re-activamos el botón para reintentar
-                startButton.disabled = false;
-            }
-        }
-
-        /**
-         * Lógica de sondeo (Polling) para verificar la INSTANCIA del sistema MindAR.
-         */
-        function checkMindARSystemInstance() {
-            // Intentamos obtener el sistema usando el nombre CORRECTO: mindar-image-system
-            arSystem = sceneEl.systems["mindar-image-system"];
-            
-            if (arSystem) {
-                // Éxito: Detener el sondeo y activar el botón.
-                clearInterval(mindARCheckInterval); 
-                statusMessage.textContent = '✅ Motor AR listo. Presione INICIAR CÁMARA.';
-                startButton.disabled = false;
-                startButton.textContent = 'INICIAR CÁMARA Y AR';
-                statusMessage.style.backgroundColor = 'rgba(16, 185, 129, 0.9)'; // Verde éxito
-                console.log("MindAR System Instance Check: ¡Sistema detectado!");
-            }
         }
 
         // 1. Adjuntar la función de inicio al botón
         startButton.addEventListener('click', startAR);
 
-        // 2. Iniciar el sondeo inmediatamente cada 100ms.
-        const mindARCheckInterval = setInterval(checkMindARSystemInstance, 100);
-
         // --- Implementación de Handlers de Eventos MindAR (Para Feedback Visual) ---
         
         sceneEl.addEventListener('mindar-start', function() {
             statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de la tarjeta!';
-            statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)';
+            statusMessage.style.backgroundColor = 'rgba(16, 185, 129, 0.9)'; // Éxito (Verde)
         });
         
         sceneEl.addEventListener("arError", (event) => {
-            statusMessage.innerHTML = '❌ Fallo al iniciar MindAR. Bloqueo de permisos o incompatibilidad.';
-            statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
+            statusMessage.innerHTML = '❌ Fallo crítico al iniciar MindAR. Bloqueo de permisos o incompatibilidad.';
+            statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; // Error (Rojo)
         });
 
         targetEl.addEventListener('targetFound', event => {
