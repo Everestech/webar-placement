@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR - Chequeo de Instancia Definitivo</title>
+    <title>MindAR - Activación por Evento arReady</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -71,9 +71,9 @@
 
     <!-- Overlay de inicio -->
     <div id="start-overlay">
-        <h1 class="text-3xl font-bold text-white mb-6">MindAR: Chequeo de Instancia del Sistema</h1>
+        <h1 class="text-3xl font-bold text-white mb-6">MindAR: Activación por Evento `arReady`</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            Verificando la instancia del sistema MindAR dentro de la escena A-Frame. Por favor, espere...
+            Esperando la inicialización del motor AR. El botón se activará automáticamente con el evento `arReady`.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
             ⚠️ Marcador de prueba: Enfoque la imagen de la tarjeta de póker (Joker).
@@ -90,7 +90,7 @@
 
     <!-- Mensaje de estado flotante -->
     <div id="status-message">
-        Esperando la instancia del sistema MindAR...
+        Cargando la escena A-Frame...
     </div>
 
     <!-- Escena de A-Frame con MindAR -->
@@ -110,21 +110,39 @@
         </a-assets>
 
         <!-- CRÍTICO: Definición de la cámara MindAR -->
-        <a-camera mindar-image-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-camera 
+            mindar-image-camera 
+            position="0 0 0" 
+            look-controls="enabled: false"
+            cursor="fuse: false; rayOrigin: mouse;" 
+            raycaster="near: 10; far: 10000; objects: .clickable"
+        ></a-camera>
 
         <!-- Marcador de IMAGEN: Target 0 (la tarjeta de póker) -->
         <a-entity mindar-image-target="targetIndex: 0" id="mindar-target">
             
-            <!-- Plano para visualizar la imagen del marcador, útil para debug -->
-            <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
+            <!-- Plano interactivo usando las clases clickables mencionadas en la documentación -->
+            <a-plane 
+                id="example-plane" 
+                class="clickable" 
+                color="#06B6D4" 
+                opacity="0.8" 
+                position="0 0 0" 
+                height="0.552" 
+                width="1" 
+                rotation="0 0 0"
+                shadow
+            >
+                <a-text value="¡Haz clic aquí!" color="white" align="center" position="0 0 0.01" scale="0.3 0.3 0.3"></a-text>
+            </a-plane>
 
-            <!-- Modelo 3D con animación, usando los assets del ejemplo -->
+            <!-- Modelo 3D con animación, ligeramente sobre el plano -->
             <a-gltf-model 
                 rotation="0 0 0 " 
-                position="0 0 0.1" 
+                position="0 0 0.15" 
                 scale="0.005 0.005 0.005" 
                 src="#avatarModel"
-                animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate"
+                animation="property: rotation; to: 0 360 0; dur: 10000; easing: linear; loop: true"
             ></a-gltf-model>
 
         </a-entity>
@@ -137,86 +155,85 @@
         const overlayEl = document.getElementById('start-overlay');
         const targetEl = document.getElementById('mindar-target');
         const startButton = document.getElementById('ar-button-start');
+        const examplePlane = document.getElementById('example-plane');
         
-        let attempts = 0;
-        const maxAttempts = 100; // 10 segundos de espera total
+        let arSystem = null;
+
+        // CRÍTICO: Esperar a que toda la escena de A-Frame esté cargada
+        sceneEl.addEventListener('loaded', function () {
+            // Intentamos obtener el sistema usando el nombre CORRECTO de la documentación
+            arSystem = sceneEl.systems["mindar-image-system"];
+            
+            if (arSystem) {
+                console.log("Sistema MindAR (Instancia) encontrado después de 'loaded'.");
+                statusMessage.textContent = 'A-Frame listo. Esperando inicialización MindAR...';
+            } else {
+                // Si incluso después de 'loaded' falla, mostramos un error de inicialización de A-Frame
+                const errorMsg = '⚠️ ERROR DE SISTEMA: El componente MindAR NO se instanció en A-Frame.';
+                statusMessage.innerHTML = errorMsg;
+                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
+                console.error(errorMsg);
+            }
+        });
 
         /**
-         * Función asíncrona para iniciar MindAR
+         * Función asíncrona para iniciar MindAR, llamada al hacer clic.
          */
         async function startAR() {
+            if (!arSystem) {
+                // Esto debería ser un error si el botón está activo, pero es una buena verificación de seguridad.
+                statusMessage.innerHTML = '⚠️ ERROR: El sistema AR no está disponible. Recarga la página.';
+                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
+                return;
+            }
+
             startButton.disabled = true;
             statusMessage.textContent = 'Iniciando proceso de cámara (esperando permisos)...';
 
             overlayEl.style.display = 'none';
             sceneEl.style.display = 'block';
 
-            await new Promise(resolve => setTimeout(resolve, 50)); 
-            
-            // Requerir el sistema de la escena. Sabemos que existe gracias al polling.
-            const mindarSystem = sceneEl.systems['mindar-image'];
-            
-            if (!mindarSystem) {
-                 // Esto solo ocurriría si el sistema desaparece después de ser encontrado.
-                 let fatalError = '⚠️ ERROR CRÍTICO POST-CLICK: El sistema MindAR no está disponible. Fallo inesperado en el sistema de A-Frame.';
-                 statusMessage.innerHTML = fatalError;
-                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
-                 console.error(fatalError);
-                 return;
-            }
-            
             try {
-                // Iniciar el sistema MindAR (solicita permisos de cámara aquí)
-                console.log("MindAR System encontrado. Intentando iniciar...");
-                await mindarSystem.start(); 
+                // Llamada a la API de inicio
+                await arSystem.start(); 
                 
             } catch (error) {
-                // Manejo de errores de inicio (típicamente permisos de cámara denegados)
+                // Errores de permisos/hardware
                 let errorMessage = `
-                    ⚠️ ERROR DE CÁMARA/PERMISOS: Falló al iniciar el video.
+                    ⚠️ ERROR DE CÁMARA/PERMISOS: Falló al iniciar.
                     <br>
-                    El navegador SÍ fue preguntado, pero el permiso fue denegado o hubo un fallo de hardware.
+                    Verifique que el permiso de cámara no esté denegado para esta página.
                 `;
                 statusMessage.innerHTML = errorMessage;
                 statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
-                console.error("MindAR System Start Error (Permisos/Hardware):", error);
-            }
-        }
-
-        /**
-         * Lógica de sondeo (Polling) para verificar la INSTANCIA del sistema MindAR.
-         */
-        function checkMindARSystemInstance() {
-            // CRÍTICO: Chequea si el objeto de la escena tiene la instancia del sistema MindAR
-            const mindarSystemInstance = sceneEl.systems['mindar-image'];
-            
-            attempts++;
-
-            if (mindarSystemInstance) {
-                // Éxito: La instancia del sistema MindAR ha sido creada en la escena.
-                clearInterval(mindARCheckInterval); // Detener el sondeo
-                statusMessage.textContent = 'Sistema AR listo. Presione INICIAR CÁMARA.';
+                console.error("MindAR System Start Error:", error);
+                
+                // Si falla, volvemos a mostrar el botón si es posible
                 startButton.disabled = false;
-                statusMessage.style.backgroundColor = 'rgba(16, 185, 129, 0.9)'; // Verde éxito
-                console.log(`MindAR System Instance Check: ¡Detectado en ${attempts} intentos!`);
-            } else if (attempts >= maxAttempts) {
-                // Fallo: Se alcanzó el límite de tiempo.
-                clearInterval(mindARCheckInterval); // Detener el sondeo
-                statusMessage.innerHTML = '⚠️ ERROR FATAL: El sistema MindAR no se instanció después de 10 segundos. Algo está bloqueando A-Frame.';
-                statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
-                console.error("Error: Límite de tiempo excedido. MindAR System Instance not found.");
-            } else {
-                statusMessage.textContent = `Esperando instancia del sistema... (Intento ${attempts}/${maxAttempts})`;
+                overlayEl.style.display = 'flex';
+                sceneEl.style.display = 'none';
             }
         }
 
         // 1. Adjuntar la función de inicio al botón
         startButton.addEventListener('click', startAR);
 
-        // 2. Iniciar el sondeo cada 100ms hasta que la instancia del sistema exista.
-        const mindARCheckInterval = setInterval(checkMindARSystemInstance, 100);
+        // --- Implementación de Handlers de Eventos MindAR (Según la Documentación) ---
+        
+        // CRÍTICO: El botón se activa ÚNICAMENTE cuando MindAR reporta que está listo
+        sceneEl.addEventListener("arReady", (event) => {
+            statusMessage.textContent = '✅ Motor AR listo. Presione INICIAR CÁMARA.';
+            statusMessage.style.backgroundColor = 'rgba(16, 185, 129, 0.9)'; // Verde
+            startButton.disabled = false;
+            console.log("MindAR is ready (arReady event fired)");
+        });
 
-        // --- Implementación de Handlers de Eventos MindAR (como sugiere la documentación) ---
+        // Evento de error de MindAR (generalmente fallos de compatibilidad/cámara)
+        sceneEl.addEventListener("arError", (event) => {
+            statusMessage.innerHTML = '❌ Fallo al iniciar MindAR. Posible incompatibilidad o bloqueo de permisos.';
+            statusMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.9)'; 
+            console.error("MindAR failed to start (arError event fired)");
+        });
         
         // Listener para cuando la sesión de AR comienza (después de start() exitoso)
         sceneEl.addEventListener('mindar-start', function() {
@@ -224,23 +241,35 @@
             statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)';
         });
         
-        // Listener para cuando la sesión de AR se detiene
-        sceneEl.addEventListener('mindar-stop', function() {
-            statusMessage.textContent = 'AR detenido. Presione el botón para reiniciar.';
-            statusMessage.style.backgroundColor = 'rgba(251, 191, 36, 0.9)';
-            startButton.disabled = false;
-        });
-
         // Listener para cuando un marcador es encontrado
-        targetEl.addEventListener('targetFound', function() {
+        targetEl.addEventListener('targetFound', event => {
             statusMessage.textContent = '¡MARCADOR DETECTADO! Modelo 3D visible.';
             statusMessage.style.backgroundColor = 'rgba(168, 85, 247, 0.9)'; // Púrpura
+            console.log("Target found");
         });
 
         // Listener para cuando un marcador se pierde
-        targetEl.addEventListener('targetLost', function() {
+        targetEl.addEventListener('targetLost', event => {
             statusMessage.textContent = 'Marcador perdido. Siga enfocando la tarjeta.';
             statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)'; // Azul
+            console.log("Target lost");
+        });
+
+        // Ejemplo de detección de clic en el plano 3D (requiere cursor y raycaster en la cámara)
+        examplePlane.addEventListener("click", event => {
+            statusMessage.textContent = '👋 ¡Se hizo clic en el modelo 3D!';
+            statusMessage.style.backgroundColor = 'rgba(251, 191, 36, 0.9)'; // Amarillo
+            console.log("Plane clicked");
+            setTimeout(() => {
+                // Volver al estado anterior después de 2 segundos
+                if (targetEl.components.mindarTarget.found) {
+                     statusMessage.textContent = '¡MARCADOR DETECTADO! Modelo 3D visible.';
+                     statusMessage.style.backgroundColor = 'rgba(168, 85, 247, 0.9)';
+                } else {
+                    statusMessage.textContent = 'Cámara activa. ¡Busque el marcador de la tarjeta!';
+                    statusMessage.style.backgroundColor = 'rgba(6, 182, 212, 0.9)';
+                }
+            }, 2000);
         });
     </script>
 </body>
