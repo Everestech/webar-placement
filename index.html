@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR - Activación de Cámara</title>
+    <title>MindAR - Solución de Fondo Negro (Alpha)</title>
     
     <!-- Tailwind CSS para estilos de UI -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -24,7 +24,7 @@
             height: 100vh;
         }
         
-        /* CRÍTICO: La escena A-Frame siempre está en el fondo y ocupa todo el espacio. */
+        /* La escena A-Frame siempre está en el fondo y ocupa todo el espacio. */
         a-scene {
             position: fixed !important; 
             top: 0 !important; 
@@ -34,14 +34,13 @@
             z-index: 10;
         }
 
-        /* Overlay de inicio (Sirve como pantalla de carga/inicio, cubriendo la escena AR) */
+        /* Overlay de inicio (Cubre la escena hasta que se haga clic) */
         #start-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%; 
-            /* Se hace semi-transparente para que la escena pueda inicializarse detrás */
             background-color: rgba(0, 0, 0, 0.95);
             z-index: 2000;
             display: flex;
@@ -50,12 +49,12 @@
             flex-direction: column;
             text-align: center;
             padding: 20px;
-            transition: opacity 0.5s ease-out; /* Animación de salida */
+            transition: opacity 0.5s ease-out;
         }
 
         /* Mensaje de estado para feedback al usuario */
         #status-message {
-            z-index: 3000; /* Asegura que esté por encima de todo */
+            z-index: 3000;
             position: fixed;
             bottom: 0;
             width: 100%;
@@ -72,12 +71,15 @@
 </head>
 <body class="overflow-hidden">
 
-    <!-- Escena de A-Frame con MindAR (Debe estar siempre aquí para inicializar la cámara) -->
+    <!-- Escena de A-Frame con MindAR -->
     <a-scene 
         id="ar-scene"
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;"
         color-space="sRGB" 
-        renderer="colorManagement: true, physicallyCorrectLights: true"
+        
+        <!-- CRÍTICO: Configuración del renderer con alpha: true para transparencia -->
+        renderer="alpha: true, colorManagement: true, physicallyCorrectLights: true"
+        
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false"
     >
@@ -124,7 +126,7 @@
     <div id="start-overlay">
         <h1 class="text-3xl font-bold text-white mb-6">MindAR - Realidad Aumentada</h1>
         <p class="text-gray-300 mb-8 text-lg max-w-md">
-            La cámara se activará al presionar el botón. Por favor, asegúrese de otorgar permisos.
+            La escena AR está lista. Presiona el botón para iniciar la cámara y ver el entorno real.
         </p>
         <p class="text-yellow-400 mb-4 text-sm font-semibold">
             ⚠️ Marcador de prueba: Enfoque la imagen de la tarjeta de póker (Joker).
@@ -207,6 +209,7 @@
                 clearInterval(mindARCheckInterval); 
                 statusMessage.textContent = '✅ Motor AR listo. Presione INICIAR CÁMARA.';
                 startButton.disabled = false;
+                startButton.textContent = 'INICIAR CÁMARA Y AR';
                 statusMessage.style.backgroundColor = 'rgba(16, 185, 129, 0.9)'; // Verde éxito
                 console.log("MindAR System Instance Check: ¡Sistema detectado!");
             }
