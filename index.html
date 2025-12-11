@@ -42,6 +42,12 @@
         #start-button {
             transition: all 0.2s ease;
         }
+
+        #start-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+            transform: none !important;
+        }
     </style>
 </head>
 <body class="bg-gray-900 overflow-hidden">
@@ -51,11 +57,11 @@
         
         <div class="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full text-center">
             <h1 class="text-2xl font-bold text-gray-800 mb-6">Iniciar Realidad Aumentada</h1>
-            <button id="start-button" class="w-full py-4 px-6 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg transform hover:scale-[1.02] active:scale-[0.98]">
-                INICIAR CÁMARA
+            <button id="start-button" disabled class="w-full py-4 px-6 bg-gray-400 text-white font-bold text-lg rounded-xl shadow-lg">
+                CARGANDO AR...
             </button>
             <div id="message-area" class="mt-4 text-gray-600 text-sm">
-                Pulse el botón para activar la cámara y el escáner.
+                Esperando a que la escena 3D termine de cargar.
             </div>
         </div>
         
@@ -105,55 +111,67 @@
             const messageArea = document.getElementById('message-area');
             const sceneEl = document.getElementById('scene-container');
 
-            // Función para actualizar el mensaje de la UI
+            // --- Funciones de utilidad ---
+
             const updateMessage = (text, isError = false) => {
                 messageArea.textContent = text;
                 messageArea.className = isError ? 'mt-4 text-red-600 font-semibold text-base' : 'mt-4 text-gray-600 text-sm';
             };
 
-            // Función para reestablecer el botón de inicio/reintento
             const resetStartButton = (isError = false) => {
                 startButton.disabled = false;
                 startButton.textContent = isError ? "REINTENTAR" : "INICIAR CÁMARA";
                 
-                startButton.classList.remove('bg-gray-400', 'bg-red-500', 'hover:bg-red-600');
+                startButton.classList.remove('bg-gray-400', 'bg-red-500', 'hover:bg-red-600', 'bg-green-600', 'hover:bg-green-700');
+
                 if (isError) {
                      startButton.classList.add('bg-red-500', 'hover:bg-red-600');
                 } else {
                      startButton.classList.add('bg-green-600', 'hover:bg-green-700');
                 }
             };
+            
+            // --- Lógica de Inicialización de A-Frame ---
+            
+            // Habilitar el botón SÓLO cuando A-Frame y MindAR hayan terminado de inicializar la escena.
+            sceneEl.addEventListener('loaded', () => {
+                console.log("A-Frame Scene Loaded. Enabling button.");
+                resetStartButton(false);
+                updateMessage("Pulse el botón para activar la cámara y el escáner.", false);
+            }, { once: true });
 
-            // Función principal de inicio de AR
+
+            // --- Función principal de inicio de AR ---
             const startAR = async () => {
                 startButton.disabled = true;
+                startButton.textContent = "ACTIVANDO...";
                 startButton.classList.remove('bg-green-600', 'hover:bg-green-700', 'bg-red-500', 'hover:bg-red-600');
                 startButton.classList.add('bg-gray-400');
                 updateMessage("Solicitando acceso a la cámara...", false);
 
                 try {
-                    // *** PASO CLAVE 1: Solicitud nativa de permisos ***
-                    // Esto ayuda a que el navegador muestre el diálogo de permiso antes de la inicialización de A-Frame.
+                    // Verificación robusta del componente después de que la escena ha cargado
+                    const mindarComponent = sceneEl.components['mindar-image'];
+                    
+                    if (!mindarComponent || typeof mindarComponent.start !== 'function') {
+                        throw new Error("El componente 'mindar-image' está presente pero su método start() no está disponible. Posiblemente un error de carga de A-Frame/MindAR.");
+                    }
+
+                    // Pre-solicitud de permisos (opcional, pero ayuda a la fluidez)
                     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                     stream.getTracks().forEach(track => track.stop()); 
 
-                    // *** PASO CLAVE 2: Obtener el componente MindAR y verificar su existencia ***
-                    const mindarComponent = sceneEl.components['mindar-image'];
-                    
-                    if (!mindarComponent) {
-                        throw new Error("El componente 'mindar-image' no se ha cargado correctamente en A-Frame. Verifique los scripts en el <head>.");
-                    }
-
-                    // *** PASO CLAVE 3: Iniciar MindAR ***
+                    // Iniciar MindAR
                     sceneEl.setAttribute('visible', 'true');
                     sceneEl.play();
                     
-                    // MindAR start() puede tardar, lo manejamos con await
+                    // Aquí llamamos a la función start(), que ahora SÍ debería existir.
                     await mindarComponent.start();
 
                     // Si MindAR se inicia correctamente, ocultar la UI
                     sceneEl.addEventListener('mindar-started', () => {
                         console.log("MindAR iniciado. Ocultando UI.");
+                        // Ocultar la UI con una transición suave
                         uiContainer.style.opacity = '0';
                         setTimeout(() => uiContainer.style.display = 'none', 500); 
                     }, { once: true });
@@ -163,17 +181,19 @@
                     
                     let errorMessage = "";
                     if (error.name === 'NotAllowedError') {
-                        errorMessage = "ERROR: El acceso a la cámara fue denegado por el usuario o bloqueado por el navegador (común en vistas previas incrustadas/iframes).";
+                        errorMessage = "ERROR: El acceso a la cámara fue denegado por el usuario (o bloqueado por el navegador, intente fuera del iframe).";
                     } else if (error.name === 'NotFoundError') {
-                        errorMessage = "ERROR: No se encontró una cámara. Asegúrese de que el dispositivo tenga una cámara activa.";
+                        errorMessage = "ERROR: No se encontró una cámara.";
                     } else if (error.name === 'SecurityError') {
-                        errorMessage = "ERROR DE SEGURIDAD: El navegador está bloqueando la cámara. Intente usar esta URL directamente en el navegador, fuera de la vista previa.";
+                        errorMessage = "ERROR DE SEGURIDAD: El navegador está bloqueando la cámara. Intente usar esta URL directamente.";
                     } else {
-                        errorMessage = `ERROR DESCONOCIDO: ${error.message}. Revise la consola. El componente MindAR pudo no inicializarse.`;
+                        errorMessage = `ERROR DESCONOCIDO: ${error.message}.`;
                     }
 
                     updateMessage(errorMessage, true);
-                    resetStartButton(true);
+                    resetStartButton(true); // Permitir reintento
+                    
+                    // Detener y ocultar la escena en caso de error
                     sceneEl.setAttribute('visible', 'false');
                     sceneEl.pause();
                 }
