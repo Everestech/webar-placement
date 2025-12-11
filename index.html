@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR: Detección de Marcador</title>
+    <title>WebAR: Detección de Marcador (MindAR)</title>
     
     <!-- Tailwind CSS CDN para estilo -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -104,7 +104,6 @@
             const startButton = document.getElementById('start-button');
             const messageArea = document.getElementById('message-area');
             const sceneEl = document.getElementById('scene-container');
-            const mindarComponent = sceneEl.components['mindar-image'];
 
             // Función para actualizar el mensaje de la UI
             const updateMessage = (text, isError = false) => {
@@ -112,22 +111,44 @@
                 messageArea.className = isError ? 'mt-4 text-red-600 font-semibold text-base' : 'mt-4 text-gray-600 text-sm';
             };
 
+            // Función para reestablecer el botón de inicio/reintento
+            const resetStartButton = (isError = false) => {
+                startButton.disabled = false;
+                startButton.textContent = isError ? "REINTENTAR" : "INICIAR CÁMARA";
+                
+                startButton.classList.remove('bg-gray-400', 'bg-red-500', 'hover:bg-red-600');
+                if (isError) {
+                     startButton.classList.add('bg-red-500', 'hover:bg-red-600');
+                } else {
+                     startButton.classList.add('bg-green-600', 'hover:bg-green-700');
+                }
+            };
+
             // Función principal de inicio de AR
             const startAR = async () => {
                 startButton.disabled = true;
-                startButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                startButton.classList.remove('bg-green-600', 'hover:bg-green-700', 'bg-red-500', 'hover:bg-red-600');
                 startButton.classList.add('bg-gray-400');
                 updateMessage("Solicitando acceso a la cámara...", false);
 
                 try {
-                    // *** PASO CLAVE 1: Solicitar permisos de forma nativa (más agresiva) ***
-                    // Esto es lo que debería forzar el diálogo de permiso si es posible.
+                    // *** PASO CLAVE 1: Solicitud nativa de permisos ***
+                    // Esto ayuda a que el navegador muestre el diálogo de permiso antes de la inicialización de A-Frame.
                     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    stream.getTracks().forEach(track => track.stop()); // Detener la pista inmediatamente después de obtener el permiso
+                    stream.getTracks().forEach(track => track.stop()); 
 
-                    // *** PASO CLAVE 2: Iniciar MindAR ***
+                    // *** PASO CLAVE 2: Obtener el componente MindAR y verificar su existencia ***
+                    const mindarComponent = sceneEl.components['mindar-image'];
+                    
+                    if (!mindarComponent) {
+                        throw new Error("El componente 'mindar-image' no se ha cargado correctamente en A-Frame. Verifique los scripts en el <head>.");
+                    }
+
+                    // *** PASO CLAVE 3: Iniciar MindAR ***
                     sceneEl.setAttribute('visible', 'true');
                     sceneEl.play();
+                    
+                    // MindAR start() puede tardar, lo manejamos con await
                     await mindarComponent.start();
 
                     // Si MindAR se inicia correctamente, ocultar la UI
@@ -142,22 +163,17 @@
                     
                     let errorMessage = "";
                     if (error.name === 'NotAllowedError') {
-                        errorMessage = "ERROR: El acceso a la cámara fue denegado. Es posible que el navegador haya bloqueado la solicitud sin mostrar el diálogo, especialmente en esta vista previa incrustada.";
+                        errorMessage = "ERROR: El acceso a la cámara fue denegado por el usuario o bloqueado por el navegador (común en vistas previas incrustadas/iframes).";
                     } else if (error.name === 'NotFoundError') {
                         errorMessage = "ERROR: No se encontró una cámara. Asegúrese de que el dispositivo tenga una cámara activa.";
                     } else if (error.name === 'SecurityError') {
-                        errorMessage = "ERROR DE SEGURIDAD: El navegador está bloqueando la cámara. Esto es muy común en vistas previas incrustadas (iframes). Intente recargar o usar un navegador diferente.";
+                        errorMessage = "ERROR DE SEGURIDAD: El navegador está bloqueando la cámara. Intente usar esta URL directamente en el navegador, fuera de la vista previa.";
                     } else {
-                        errorMessage = `ERROR DESCONOCIDO: ${error.message}. Por favor, revise la consola.`;
+                        errorMessage = `ERROR DESCONOCIDO: ${error.message}. Revise la consola. El componente MindAR pudo no inicializarse.`;
                     }
 
                     updateMessage(errorMessage, true);
-                    
-                    // Reestablecer el botón para reintentar
-                    startButton.textContent = "REINTENTAR";
-                    startButton.disabled = false;
-                    startButton.classList.remove('bg-gray-400');
-                    startButton.classList.add('bg-red-500', 'hover:bg-red-600');
+                    resetStartButton(true);
                     sceneEl.setAttribute('visible', 'false');
                     sceneEl.pause();
                 }
@@ -166,15 +182,11 @@
             // Manejar el clic del botón
             startButton.addEventListener('click', startAR);
             
-            // Si MindAR detecta un error de cámara (como una denegación posterior), lo gestionamos
-            sceneEl.addEventListener('mindar-camera-error', (e) => {
-                console.error("MindAR reporta error de cámara:", e);
+            // Si MindAR detecta un error de cámara durante la ejecución
+            sceneEl.addEventListener('mindar-camera-error', () => {
                 updateMessage("MindAR Falló: La cámara se perdió o fue denegada durante la ejecución. Reintente.", true);
                 
-                startButton.textContent = "REINICIAR";
-                startButton.disabled = false;
-                startButton.classList.remove('bg-gray-400');
-                startButton.classList.add('bg-red-500', 'hover:bg-red-600');
+                resetStartButton(true);
                 uiContainer.style.display = 'flex';
                 uiContainer.style.opacity = '1';
                 sceneEl.setAttribute('visible', 'false');
