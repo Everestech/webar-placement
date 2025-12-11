@@ -3,34 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR Auto-Inicio</title>
+    <title>MindAR: Diagnóstico Puro (Sin JS Extra)</title>
     
-    <!-- Librerías de AR -->
+    <!-- Librerías de AR (¡CRÍTICO: Aseguramos que se carguen primero!) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-        /* Oculta el cuerpo para que solo se vea la escena AR */
+        /* CSS para que la escena cubra toda la pantalla y no haya barras de desplazamiento */
         body { margin: 0; padding: 0; overflow: hidden; }
         
-        /* Asegura que la escena ocupe toda la pantalla */
         a-scene {
-            position: fixed !important; 
-            top: 0 !important; 
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important; 
-            background-color: transparent !important;
+            position: fixed; 
+            top: 0; 
+            left: 0;
+            width: 100%;
+            height: 100%; 
         }
     </style>
 </head>
 <body>
 
-    <!-- Escena de A-Frame con MindAR -->
+    <!--
+        Si este código no funciona, el problema está en la carga de A-Frame
+        o la compatibilidad del navegador/entorno de vista previa.
+    -->
     <a-scene 
-        id="ar-scene"
         
-        <!-- CRÍTICO: autoStart: true (valor por defecto) o simplemente no incluirlo -->
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;" 
         
         color-space="sRGB" 
@@ -39,50 +38,26 @@
         device-orientation-permission-ui="enabled: false"
     >
         <a-assets>
-            <!-- Recursos necesarios para el modelo y el target -->
-            <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" crossorigin="anonymous"/>
+            <!-- Modelo GLTF para el target -->
             <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf" crossorigin="anonymous"></a-asset-item>
         </a-assets>
 
-        <!-- Cámara con el componente MindAR -->
+        <!-- Cámara de MindAR -->
         <a-camera mindar-image-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <!-- Contenido que aparece sobre la imagen target (Índice 0) -->
+        <!-- Contenido AR para el primer target (Índice 0) -->
         <a-entity mindar-image-target="targetIndex: 0">
-            <!-- El modelo 3D con animación, idéntico al ejemplo -->
+            <!-- Un modelo simple flotando sobre la imagen -->
             <a-gltf-model 
                 rotation="0 0 0 " 
                 position="0 0 0.1" 
                 scale="0.005 0.005 0.005" 
                 src="#avatarModel" 
-                animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate"
             >
             </a-gltf-model>
             
         </a-entity>
     </a-scene>
 
-    <!--
-        Este script es opcional y solo se usa para depuración.
-        Muestra un mensaje si la cámara se inicia.
-    -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const sceneEl = document.getElementById('ar-scene');
-            
-            // Cuando la escena se ha cargado completamente, intenta acceder a la cámara
-            sceneEl.addEventListener('camera-ready', () => {
-                console.log('MindAR: Cámara lista y AR iniciada automáticamente.');
-            });
-            
-            // Manejar el caso de que la inicialización falle (ej. permisos denegados)
-            sceneEl.addEventListener('error', (event) => {
-                console.error('MindAR ERROR:', event.detail);
-                alert('ERROR: Falló el inicio de la cámara. Verifique los permisos.');
-            });
-
-            // MindAR maneja el inicio automáticamente, no necesitamos más JS aquí.
-        });
-    </script>
 </body>
 </html>
