@@ -3,17 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR: Activación Ultra-Forzada</title>
+    <title>WebAR: Detección de Marcador</title>
+    
+    <!-- Tailwind CSS CDN para estilo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
     
     <!-- Librerías de AR (CRÍTICO: Deben cargarse en el head) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-        /* Estilos base con Tailwind básico para centrar */
-        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #111827; }
-        
-        /* Asegura que la escena ocupe toda la pantalla y esté detrás del botón */
+        /* Asegura que la escena ocupe toda la pantalla y esté detrás de la UI */
         a-scene {
             position: fixed; 
             top: 0; 
@@ -22,66 +33,41 @@
             height: 100%; 
         }
 
-        /* Estilo para el contenedor del botón y mensajes */
+        /* Estilo para el contenedor del botón y mensajes (superpuesto) */
         #ui-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000; 
-            background-color: rgba(0, 0, 0, 0.7); /* Fondo semi-transparente */
             transition: opacity 0.5s;
         }
-
-        /* Estilo para el botón de activación de la cámara */
-        #start-button {
-            padding: 20px 40px;
-            font-size: 1.6rem;
-            font-weight: bold;
-            color: white;
-            background: linear-gradient(45deg, #4CAF50, #8BC34A); 
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.4);
-            transition: all 0.3s ease;
-        }
-
-        #start-button:hover {
-            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.6);
-            transform: scale(1.05);
-        }
         
-        #loading-message {
-            margin-top: 20px;
-            font-size: 1.2rem;
-            color: #ccc;
-            opacity: 0; /* Oculto inicialmente */
+        /* Estilo para el botón de activación */
+        #start-button {
+            transition: all 0.2s ease;
         }
     </style>
 </head>
-<body>
+<body class="bg-gray-900 overflow-hidden">
 
     <!-- Contenedor de la UI (botón y mensajes) que se oculta al iniciar -->
-    <div id="ui-container">
-        <button id="start-button">INICIAR AR (TOCA AQUÍ)</button>
-        <div id="loading-message">
-            Cargando cámara... Por favor, acepte los permisos del navegador.
+    <div id="ui-container" class="fixed inset-0 flex flex-col justify-center items-center z-50 bg-gray-900 bg-opacity-95 p-4">
+        
+        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full text-center">
+            <h1 class="text-2xl font-bold text-gray-800 mb-6">Iniciar Realidad Aumentada</h1>
+            <button id="start-button" class="w-full py-4 px-6 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg transform hover:scale-[1.02] active:scale-[0.98]">
+                INICIAR CÁMARA
+            </button>
+            <div id="message-area" class="mt-4 text-gray-600 text-sm">
+                Pulse el botón para activar la cámara y el escáner.
+            </div>
         </div>
+        
     </div>
 
     <a-scene 
         id="scene-container"
         
-        /* DESACTIVAMOS el autoStart para controlarlo manualmente */
+        /* Desactivamos autoStart para controlarlo manualmente */
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;" 
         
-        /* Pausamos A-Frame inicialmente */
+        /* Pausamos A-Frame inicialmente y la ocultamos */
         paused="true" 
         visible="false" 
         
@@ -116,75 +102,85 @@
         document.addEventListener('DOMContentLoaded', () => {
             const uiContainer = document.getElementById('ui-container');
             const startButton = document.getElementById('start-button');
-            const loadingMessage = document.getElementById('loading-message');
+            const messageArea = document.getElementById('message-area');
             const sceneEl = document.getElementById('scene-container');
-            
-            // Acceso al componente mindar-image para controlarlo manualmente
             const mindarComponent = sceneEl.components['mindar-image'];
 
-            // Función para iniciar la experiencia
-            const startAR = async () => {
-                // 1. Mostrar mensaje de carga mientras se espera el permiso
-                startButton.style.display = 'none';
-                loadingMessage.style.opacity = '1';
-
-                // 2. Hacer visible la escena (si no lo estaba)
-                sceneEl.setAttribute('visible', 'true');
-                
-                // 3. Forzar la reanudación de la escena de A-Frame
-                sceneEl.play();
-                
-                // 4. Intentar iniciar MindAR explícitamente.
-                // Esto es la orden más directa para solicitar la cámara.
-                try {
-                    await mindarComponent.start();
-                } catch (error) {
-                    console.error("Fallo al iniciar MindAR o la cámara:", error);
-                    // Mostrar error y volver a mostrar el botón
-                    loadingMessage.textContent = "¡ERROR! Permiso de Cámara Denegado o Bloqueado.";
-                    loadingMessage.style.color = '#FF6347';
-                    startButton.textContent = "REINTENTAR";
-                    startButton.style.display = 'block';
-                    sceneEl.setAttribute('visible', 'false');
-                    sceneEl.pause();
-                    return;
-                }
-
-                console.log("MindAR y A-Frame intentando iniciar...");
+            // Función para actualizar el mensaje de la UI
+            const updateMessage = (text, isError = false) => {
+                messageArea.textContent = text;
+                messageArea.className = isError ? 'mt-4 text-red-600 font-semibold text-base' : 'mt-4 text-gray-600 text-sm';
             };
 
+            // Función principal de inicio de AR
+            const startAR = async () => {
+                startButton.disabled = true;
+                startButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                startButton.classList.add('bg-gray-400');
+                updateMessage("Solicitando acceso a la cámara...", false);
 
-            // 5. Manejar el clic del botón
-            startButton.addEventListener('click', () => {
-                // Ocultar la UI una vez que MindAR confirma el inicio
-                const onMindarStarted = () => {
-                    console.log("MindAR iniciado. Ocultando UI.");
-                    uiContainer.style.opacity = '0';
-                    setTimeout(() => uiContainer.style.display = 'none', 500); // Ocultar después de la transición
-                    sceneEl.removeEventListener('mindar-started', onMindarStarted);
-                };
-                
-                sceneEl.addEventListener('mindar-started', onMindarStarted);
-                
-                startAR();
-            });
+                try {
+                    // *** PASO CLAVE 1: Solicitar permisos de forma nativa (más agresiva) ***
+                    // Esto es lo que debería forzar el diálogo de permiso si es posible.
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    stream.getTracks().forEach(track => track.stop()); // Detener la pista inmediatamente después de obtener el permiso
+
+                    // *** PASO CLAVE 2: Iniciar MindAR ***
+                    sceneEl.setAttribute('visible', 'true');
+                    sceneEl.play();
+                    await mindarComponent.start();
+
+                    // Si MindAR se inicia correctamente, ocultar la UI
+                    sceneEl.addEventListener('mindar-started', () => {
+                        console.log("MindAR iniciado. Ocultando UI.");
+                        uiContainer.style.opacity = '0';
+                        setTimeout(() => uiContainer.style.display = 'none', 500); 
+                    }, { once: true });
+
+                } catch (error) {
+                    console.error("Fallo al iniciar AR o la cámara:", error);
+                    
+                    let errorMessage = "";
+                    if (error.name === 'NotAllowedError') {
+                        errorMessage = "ERROR: El acceso a la cámara fue denegado. Es posible que el navegador haya bloqueado la solicitud sin mostrar el diálogo, especialmente en esta vista previa incrustada.";
+                    } else if (error.name === 'NotFoundError') {
+                        errorMessage = "ERROR: No se encontró una cámara. Asegúrese de que el dispositivo tenga una cámara activa.";
+                    } else if (error.name === 'SecurityError') {
+                        errorMessage = "ERROR DE SEGURIDAD: El navegador está bloqueando la cámara. Esto es muy común en vistas previas incrustadas (iframes). Intente recargar o usar un navegador diferente.";
+                    } else {
+                        errorMessage = `ERROR DESCONOCIDO: ${error.message}. Por favor, revise la consola.`;
+                    }
+
+                    updateMessage(errorMessage, true);
+                    
+                    // Reestablecer el botón para reintentar
+                    startButton.textContent = "REINTENTAR";
+                    startButton.disabled = false;
+                    startButton.classList.remove('bg-gray-400');
+                    startButton.classList.add('bg-red-500', 'hover:bg-red-600');
+                    sceneEl.setAttribute('visible', 'false');
+                    sceneEl.pause();
+                }
+            };
+
+            // Manejar el clic del botón
+            startButton.addEventListener('click', startAR);
             
-            // Opcional: Manejar errores si falla la cámara 
+            // Si MindAR detecta un error de cámara (como una denegación posterior), lo gestionamos
             sceneEl.addEventListener('mindar-camera-error', (e) => {
-                console.error("Error crítico de cámara MindAR:", e);
-                loadingMessage.textContent = "Error: Permiso de Cámara Denegado o No Disponible.";
-                loadingMessage.style.color = '#FF6347';
-                startButton.textContent = "REINTENTAR";
-                startButton.style.display = 'block';
+                console.error("MindAR reporta error de cámara:", e);
+                updateMessage("MindAR Falló: La cámara se perdió o fue denegada durante la ejecución. Reintente.", true);
+                
+                startButton.textContent = "REINICIAR";
+                startButton.disabled = false;
+                startButton.classList.remove('bg-gray-400');
+                startButton.classList.add('bg-red-500', 'hover:bg-red-600');
                 uiContainer.style.display = 'flex';
                 uiContainer.style.opacity = '1';
                 sceneEl.setAttribute('visible', 'false');
                 sceneEl.pause();
             });
 
-            // En el caso de que la escena ya haya solicitado permisos por alguna razón,
-            // nos aseguramos de que el botón aparezca al inicio.
-            uiContainer.style.display = 'flex';
         });
     </script>
 </body>
