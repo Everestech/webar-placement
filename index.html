@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MindAR Simple</title>
+    <title>MindAR Simple Starter Reparado</title>
     
-    <!-- Librerías de AR -->
+    <!-- 1. Librerías de AR (A-Frame y MindAR) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
-    <!-- Tailwind CSS para el estilo del botón -->
+    <!-- 2. Tailwind CSS para el estilo del botón -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <style>
-        /* Estilos esenciales para que la AR funcione */
+        /* Estilos esenciales para la escena AR y el overlay de inicio */
         body { margin: 0; padding: 0; overflow: hidden; }
         
-        /* Overlay que contiene el botón de inicio, cubriendo la escena inicialmente */
+        /* El Overlay debe estar SIEMPRE encima */
         #start-overlay {
             position: fixed;
             top: 0;
@@ -24,10 +24,12 @@
             width: 100%;
             height: 100%; 
             background-color: rgba(0, 0, 0, 0.95);
-            z-index: 100; /* Asegura que está encima de la escena */
+            z-index: 2000;
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
+            text-align: center;
         }
 
         /* La escena AR debe ser fija y ocupar toda la pantalla */
@@ -37,55 +39,48 @@
             left: 0 !important;
             width: 100% !important;
             height: 100% !important; 
-            z-index: 1; /* Detrás del overlay */
+            z-index: 10; 
+            background-color: transparent !important;
         }
     </style>
 </head>
 <body>
 
-    <!-- Overlay de inicio con el único botón -->
+    <!-- Overlay de inicio: SÓLO muestra el botón -->
     <div id="start-overlay">
         <button 
             id="ar-button-start"
-            class="px-10 py-5 bg-green-600 text-white font-bold text-xl rounded-lg shadow-xl hover:bg-green-700 transition duration-150 disabled:opacity-50"
+            class="px-10 py-5 bg-indigo-600 text-white font-extrabold text-xl rounded-xl shadow-2xl transition duration-200 transform hover:scale-105"
         >
-            INICIAR REALIDAD AUMENTADA
+            INICIAR EXPERIENCIA AR
         </button>
     </div>
 
 
-    <!-- Escena de A-Frame (estructura idéntica a tu ejemplo) -->
+    <!-- Escena de A-Frame con MindAR -->
     <a-scene 
         id="ar-scene"
         
-        <!-- CRÍTICO: autoStart: false para control manual -->
+        <!-- CRÍTICO: autoStart: false para que el botón tome el control -->
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;" 
         
         color-space="sRGB" 
-        renderer="colorManagement: true, physicallyCorrectLights: true"
+        renderer="alpha: true, colorManagement: true, physicallyCorrectLights: true"
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false"
     >
         <a-assets>
-            <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" crossorigin="anonymous" />
+            <!-- Recursos con crossorigin para compatibilidad -->
+            <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" crossorigin="anonymous"/>
             <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf" crossorigin="anonymous"></a-asset-item>
         </a-assets>
 
-        <!-- CRÍTICO: Debe ser mindar-image-camera -->
+        <!-- Cámara con el componente MindAR -->
         <a-camera mindar-image-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
+        <!-- Contenido que aparece sobre la imagen -->
         <a-entity mindar-image-target="targetIndex: 0">
-            <!-- El plano de la carta como referencia -->
-            <a-plane 
-                src="#card" 
-                position="0 0 0" 
-                height="0.552" 
-                width="1" 
-                rotation="0 0 0"
-                opacity="0.2"
-            ></a-plane>
-
-            <!-- El modelo 3D con la animación -->
+            <!-- El modelo 3D con animación -->
             <a-gltf-model 
                 rotation="0 0 0 " 
                 position="0 0 0.1" 
@@ -99,41 +94,46 @@
     </a-scene>
 
     <script>
+        // Referencias a los elementos DOM
         const sceneEl = document.getElementById('ar-scene');
         const overlayEl = document.getElementById('start-overlay');
         const startButton = document.getElementById('ar-button-start');
         
-        // La clave es esperar a que la escena de A-Frame se cargue completamente (evento 'loaded')
-        // antes de intentar acceder al componente MindAR y adjuntar el listener.
-        sceneEl.addEventListener('loaded', () => {
-            // Ahora A-Frame y MindAR están listos. Adjuntamos el manejador de clic.
-            startButton.addEventListener('click', async () => {
-                startButton.disabled = true;
-                startButton.textContent = 'Cargando Cámara...';
-                
-                try {
-                    // Acceder al componente directamente. ¡Ahora debería existir!
-                    const mindarComponent = sceneEl.components['mindar-image'];
-                    
-                    if (!mindarComponent) {
-                         // Si por alguna razón sigue fallando, mostramos un error claro.
-                        throw new Error("El componente 'mindar-image' no está disponible.");
-                    }
-                    
-                    // Iniciar el sistema AR y pedir permisos de cámara
-                    await mindarComponent.start(); 
+        // La lógica se ejecuta solo cuando se presiona el botón
+        startButton.addEventListener('click', async () => {
+            startButton.disabled = true;
+            startButton.textContent = 'Solicitando permisos de cámara...';
+            
+            // Accedemos al componente MindAR
+            const mindarComponent = sceneEl.components['mindar-image'];
+            
+            if (!mindarComponent) {
+                // Si aún no está disponible, mostramos el error y terminamos
+                console.error("Error crítico: Componente MindAR no encontrado. A-Frame no lo ha inicializado.");
+                startButton.textContent = '❌ ERROR: Componente no disponible. Recargue.';
+                startButton.classList.remove('bg-indigo-600');
+                startButton.classList.add('bg-red-600');
+                return;
+            }
+            
+            try {
+                // 1. Iniciar el sistema AR
+                // Esto solicitará permisos de cámara y cargará los archivos de rastreo
+                await mindarComponent.start(); 
 
-                    // Ocultar la capa de inicio y mostrar la AR
-                    overlayEl.style.display = 'none';
-                    
-                } catch (error) {
-                    console.error("Fallo al iniciar MindAR:", error);
-                    startButton.textContent = '❌ ERROR: ' + (error.message || 'Cámara bloqueada');
-                    startButton.classList.remove('bg-green-600');
-                    startButton.classList.add('bg-red-600');
-                    startButton.disabled = false;
-                }
-            });
+                // 2. Ocultar la capa de inicio si el inicio es exitoso
+                overlayEl.style.display = 'none';
+                
+            } catch (error) {
+                // 3. Manejo de errores (ej. permisos denegados, archivo de rastreo fallido)
+                console.error("Fallo al iniciar MindAR:", error);
+                
+                // Muestra un mensaje amigable al usuario
+                startButton.textContent = '❌ ERROR: Cámara bloqueada o denegada';
+                startButton.classList.remove('bg-indigo-600');
+                startButton.classList.add('bg-red-600');
+                startButton.disabled = false;
+            }
         });
     </script>
 </body>
