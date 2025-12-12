@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR: Solución de Pantalla Negra (MindAR)</title>
+    <title>WebAR: Activación Forzada de Cámara</title>
     
     <!-- Tailwind CSS CDN para un estilo básico de UI/Mensajes -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,14 +11,20 @@
         tailwind.config = {
             theme: {
                 extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#10b981',
+                    },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
                     },
                 }
             }
-        </script>
+        }
+    </script>
     
     <!-- Librerías de AR -->
+    <!-- MindAR y A-Frame -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
@@ -30,11 +36,13 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            /* **SOLUCIÓN SIMPLE**: Eliminar el color de fondo negro.
-               Si el video falla, ahora debería verse un fondo blanco o transparente, no negro. */
-            background-color: white; 
+            background-color: #1f2937; /* Fondo oscuro inicial */
+            font-family: 'Inter', sans-serif;
         }
+        
+        /* Ocultar la escena inicialmente */
         a-scene {
+            visibility: hidden; 
             position: fixed; 
             top: 0; 
             left: 0;
@@ -42,7 +50,23 @@
             height: 100%; 
         }
 
-        /* Mensaje de estado superpuesto */
+        /* Contenedor de la interfaz de usuario (Botón y Mensajes) */
+        #ui-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20; /* Asegurarse de que esté sobre la escena */
+            background-color: rgba(31, 41, 55, 0.95); /* Semi-transparente */
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        /* Mensaje de estado AR */
         #status-message {
             position: fixed;
             top: 1rem;
@@ -54,20 +78,29 @@
     </style>
 </head>
 <body>
+    
+    <!-- Contenedor de la interfaz inicial (Botón) -->
+    <div id="ui-overlay" class="p-4 text-center">
+        <h1 class="text-3xl font-bold text-white mb-6">Realidad Aumentada con MindAR</h1>
+        <p class="text-gray-300 mb-8 max-w-sm">Para iniciar la experiencia y activar la cámara, por favor, presione el botón de abajo. Se le pedirá permiso de cámara.</p>
+        <button id="startButton" class="bg-primary hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-xl transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50">
+            <svg class="inline w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.218A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.218c.243.364.597.597.973.597H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            Activar Cámara AR
+        </button>
+    </div>
 
-    <!-- Mensaje de estado simple -->
-    <div id="status-message" class="bg-yellow-500 text-yellow-900 font-bold py-2 px-4 rounded-full shadow-lg">
-        CÁMARA ACTIVA: Busque el marcador de prueba.
+    <!-- Mensaje de estado AR superpuesto -->
+    <div id="status-message" class="hidden bg-primary text-white font-bold py-2 px-4 rounded-xl shadow-lg">
+        Iniciando...
     </div>
 
     <a-scene 
         id="scene-container"
+        /* Inicialmente pausamos MindAR y esperamos el evento 'start' */
+        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false" 
         
-        /* MindAR se inicia automáticamente, lo más simple */
-        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;" 
-        
-        /* CRÍTICO: alpha: true es necesario para que el video se vea */
-        renderer="alpha: true, colorManagement: true, physicallyCorrectLights: true"
+        /* CRÍTICO: alpha: true para permitir la transparencia y ver el video de fondo */
+        renderer="alpha: true, antialias: true"
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false"
     >
@@ -96,23 +129,55 @@
 
     <script>
         const sceneEl = document.getElementById('scene-container');
+        const startButton = document.getElementById('startButton');
+        const uiOverlay = document.getElementById('ui-overlay');
         const statusMessage = document.getElementById('status-message');
 
-        // Escuchar el evento de inicio de MindAR para confirmar que la cámara está encendida.
+        // Solución Crítica de A-Frame: Forzar el fondo del canvas a ser transparente.
+        // MindAR/A-Frame crea el elemento canvas internamente.
+        sceneEl.addEventListener('loaded', () => {
+            const canvas = sceneEl.canvas;
+            if (canvas) {
+                // Hacemos que el lienzo 3D sea transparente para que el video de la cámara se vea por detrás.
+                canvas.style.backgroundColor = 'transparent';
+            }
+        });
+        
+        // Función de inicio de la experiencia AR
+        const startAR = () => {
+            // 1. Ocultar la capa de inicio y mostrar la escena
+            uiOverlay.style.opacity = '0';
+            setTimeout(() => {
+                uiOverlay.remove();
+                sceneEl.style.visibility = 'visible';
+                statusMessage.classList.remove('hidden');
+                statusMessage.textContent = "Solicitando permisos de cámara...";
+            }, 500);
+            
+            // 2. Iniciar MindAR para forzar la activación de la cámara.
+            // Esta llamada es la que dispara la solicitud de permiso del navegador.
+            sceneEl.start(); 
+        };
+
+        // Event listener para el botón de inicio
+        startButton.addEventListener('click', startAR);
+
+
+        // Eventos para actualizar el estado del usuario (feedback)
         sceneEl.addEventListener('mindar-started', () => {
              console.log("MindAR iniciado. El feed de video de la cámara debería ser visible.");
-             statusMessage.classList.remove('bg-yellow-500', 'text-yellow-900');
-             statusMessage.classList.add('bg-green-600', 'text-white');
-             statusMessage.textContent = "¡CÁMARA ACTIVA! Busque el marcador.";
+             statusMessage.classList.remove('bg-primary');
+             statusMessage.classList.add('bg-secondary');
+             statusMessage.textContent = "¡CÁMARA ACTIVA! Busque el marcador (la carta de softmind).";
         });
 
-        // Manejar errores de cámara
         sceneEl.addEventListener('mindar-camera-error', () => {
              console.error("MindAR Error: La cámara falló o fue denegada.");
-             statusMessage.classList.remove('bg-yellow-500', 'text-yellow-900', 'bg-green-600', 'text-white');
-             statusMessage.classList.add('bg-red-600', 'text-white');
-             statusMessage.textContent = "ERROR: Fallo en la cámara. Revise permisos o intente en otro navegador.";
+             statusMessage.classList.remove('bg-primary', 'bg-secondary');
+             statusMessage.classList.add('bg-red-600');
+             statusMessage.textContent = "ERROR: Fallo en la cámara. Active los permisos en la configuración del navegador.";
         });
+        
     </script>
 </body>
 </html>
