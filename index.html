@@ -3,21 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR: Inicialización Automática (MindAR)</title>
+    <title>WebAR: Solución de Pantalla Negra (MindAR)</title>
     
-    <!-- Librerías de AR (CRÍTICO: Deben cargarse en el head) -->
+    <!-- Tailwind CSS CDN para un estilo básico de UI/Mensajes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        </script>
+    
+    <!-- Librerías de AR -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-        /* Asegura que la escena ocupe toda la pantalla y esté visible */
+        /* CRÍTICO: Aseguramos que la escena ocupe toda la pantalla. */
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #000;
+            /* **SOLUCIÓN SIMPLE**: Eliminar el color de fondo negro.
+               Si el video falla, ahora debería verse un fondo blanco o transparente, no negro. */
+            background-color: white; 
         }
         a-scene {
             position: fixed; 
@@ -26,20 +41,32 @@
             width: 100%;
             height: 100%; 
         }
+
+        /* Mensaje de estado superpuesto */
+        #status-message {
+            position: fixed;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
+    <!-- Mensaje de estado simple -->
+    <div id="status-message" class="bg-yellow-500 text-yellow-900 font-bold py-2 px-4 rounded-full shadow-lg">
+        CÁMARA ACTIVA: Busque el marcador de prueba.
+    </div>
+
     <a-scene 
         id="scene-container"
         
-        /* * Inicialización Automática de MindAR: 
-         * Eliminamos "autoStart: false" para que se inicie por defecto,
-         * solucionando el problema de temporización (race condition).
-         */
+        /* MindAR se inicia automáticamente, lo más simple */
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;" 
         
-        color-space="sRGB" 
+        /* CRÍTICO: alpha: true es necesario para que el video se vea */
         renderer="alpha: true, colorManagement: true, physicallyCorrectLights: true"
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false"
@@ -55,16 +82,7 @@
         <!-- Contenido AR para el primer target (Índice 0) -->
         <a-entity mindar-image-target="targetIndex: 0">
             
-            <!-- Mensaje de prueba visible mientras no se detecta el marcador -->
-            <a-text value="¡APUNTE AL MARCADOR!" 
-                    align="center" 
-                    color="#FFC107" 
-                    width="3" 
-                    position="0 0 -1"
-                    rotation="-90 0 0">
-            </a-text>
-
-            <!-- Modelo 3D flotando sobre la imagen -->
+            <!-- El modelo 3D que se mostrará sobre el marcador -->
             <a-gltf-model 
                 rotation="0 0 0 " 
                 position="0 0 0.1" 
@@ -77,10 +95,23 @@
     </a-scene>
 
     <script>
-        // Si el navegador pide permisos, la escena se iniciará automáticamente.
-        // Agregamos un listener simple para fines de depuración
-        document.getElementById('scene-container').addEventListener('mindar-camera-error', () => {
-             console.error("MindAR Error: La cámara falló o fue denegada. Intente recargar la página.");
+        const sceneEl = document.getElementById('scene-container');
+        const statusMessage = document.getElementById('status-message');
+
+        // Escuchar el evento de inicio de MindAR para confirmar que la cámara está encendida.
+        sceneEl.addEventListener('mindar-started', () => {
+             console.log("MindAR iniciado. El feed de video de la cámara debería ser visible.");
+             statusMessage.classList.remove('bg-yellow-500', 'text-yellow-900');
+             statusMessage.classList.add('bg-green-600', 'text-white');
+             statusMessage.textContent = "¡CÁMARA ACTIVA! Busque el marcador.";
+        });
+
+        // Manejar errores de cámara
+        sceneEl.addEventListener('mindar-camera-error', () => {
+             console.error("MindAR Error: La cámara falló o fue denegada.");
+             statusMessage.classList.remove('bg-yellow-500', 'text-yellow-900', 'bg-green-600', 'text-white');
+             statusMessage.classList.add('bg-red-600', 'text-white');
+             statusMessage.textContent = "ERROR: Fallo en la cámara. Revise permisos o intente en otro navegador.";
         });
     </script>
 </body>
