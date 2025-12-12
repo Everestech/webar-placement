@@ -3,28 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR: Detección de Marcador (MindAR)</title>
-    
-    <!-- Tailwind CSS CDN para estilo -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                }
-            }
-        }
-    </script>
+    <title>WebAR: Inicialización Automática (MindAR)</title>
     
     <!-- Librerías de AR (CRÍTICO: Deben cargarse en el head) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-        /* Asegura que la escena ocupe toda la pantalla y esté detrás de la UI */
+        /* Asegura que la escena ocupe toda la pantalla y esté visible */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
         a-scene {
             position: fixed; 
             top: 0; 
@@ -32,50 +26,18 @@
             width: 100%;
             height: 100%; 
         }
-
-        /* Estilo para el contenedor del botón y mensajes (superpuesto) */
-        #ui-container {
-            transition: opacity 0.5s;
-        }
-        
-        /* Estilo para el botón de activación */
-        #start-button {
-            transition: all 0.2s ease;
-        }
-
-        #start-button:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-            transform: none !important;
-        }
     </style>
 </head>
-<body class="bg-gray-900 overflow-hidden">
-
-    <!-- Contenedor de la UI (botón y mensajes) que se oculta al iniciar -->
-    <div id="ui-container" class="fixed inset-0 flex flex-col justify-center items-center z-50 bg-gray-900 bg-opacity-95 p-4">
-        
-        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full text-center">
-            <h1 class="text-2xl font-bold text-gray-800 mb-6">Iniciar Realidad Aumentada</h1>
-            <button id="start-button" disabled class="w-full py-4 px-6 bg-gray-400 text-white font-bold text-lg rounded-xl shadow-lg">
-                CARGANDO AR...
-            </button>
-            <div id="message-area" class="mt-4 text-gray-600 text-sm">
-                Esperando a que la escena 3D termine de cargar.
-            </div>
-        </div>
-        
-    </div>
+<body>
 
     <a-scene 
         id="scene-container"
         
-        /* Desactivamos autoStart para controlarlo manualmente */
-        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;" 
-        
-        /* Pausamos A-Frame inicialmente y la ocultamos */
-        paused="true" 
-        visible="false" 
+        /* * Inicialización Automática de MindAR: 
+         * Eliminamos "autoStart: false" para que se inicie por defecto,
+         * solucionando el problema de temporización (race condition).
+         */
+        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;" 
         
         color-space="sRGB" 
         renderer="alpha: true, colorManagement: true, physicallyCorrectLights: true"
@@ -92,6 +54,16 @@
 
         <!-- Contenido AR para el primer target (Índice 0) -->
         <a-entity mindar-image-target="targetIndex: 0">
+            
+            <!-- Mensaje de prueba visible mientras no se detecta el marcador -->
+            <a-text value="¡APUNTE AL MARCADOR!" 
+                    align="center" 
+                    color="#FFC107" 
+                    width="3" 
+                    position="0 0 -1"
+                    rotation="-90 0 0">
+            </a-text>
+
             <!-- Modelo 3D flotando sobre la imagen -->
             <a-gltf-model 
                 rotation="0 0 0 " 
@@ -105,114 +77,10 @@
     </a-scene>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const uiContainer = document.getElementById('ui-container');
-            const startButton = document.getElementById('start-button');
-            const messageArea = document.getElementById('message-area');
-            const sceneEl = document.getElementById('scene-container');
-
-            // --- Funciones de utilidad ---
-
-            const updateMessage = (text, isError = false) => {
-                messageArea.textContent = text;
-                messageArea.className = isError ? 'mt-4 text-red-600 font-semibold text-base' : 'mt-4 text-gray-600 text-sm';
-            };
-
-            const resetStartButton = (isError = false) => {
-                startButton.disabled = false;
-                startButton.textContent = isError ? "REINTENTAR" : "INICIAR CÁMARA";
-                
-                startButton.classList.remove('bg-gray-400', 'bg-red-500', 'hover:bg-red-600', 'bg-green-600', 'hover:bg-green-700');
-
-                if (isError) {
-                     startButton.classList.add('bg-red-500', 'hover:bg-red-600');
-                } else {
-                     startButton.classList.add('bg-green-600', 'hover:bg-green-700');
-                }
-            };
-            
-            // --- Lógica de Inicialización de A-Frame ---
-            
-            // Habilitar el botón SÓLO cuando A-Frame y MindAR hayan terminado de inicializar la escena.
-            sceneEl.addEventListener('loaded', () => {
-                console.log("A-Frame Scene Loaded. Enabling button.");
-                resetStartButton(false);
-                updateMessage("Pulse el botón para activar la cámara y el escáner.", false);
-            }, { once: true });
-
-
-            // --- Función principal de inicio de AR ---
-            const startAR = async () => {
-                startButton.disabled = true;
-                startButton.textContent = "ACTIVANDO...";
-                startButton.classList.remove('bg-green-600', 'hover:bg-green-700', 'bg-red-500', 'hover:bg-red-600');
-                startButton.classList.add('bg-gray-400');
-                updateMessage("Solicitando acceso a la cámara...", false);
-
-                try {
-                    // Verificación robusta del componente después de que la escena ha cargado
-                    const mindarComponent = sceneEl.components['mindar-image'];
-                    
-                    if (!mindarComponent || typeof mindarComponent.start !== 'function') {
-                        throw new Error("El componente 'mindar-image' está presente pero su método start() no está disponible. Posiblemente un error de carga de A-Frame/MindAR.");
-                    }
-
-                    // Pre-solicitud de permisos (opcional, pero ayuda a la fluidez)
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    stream.getTracks().forEach(track => track.stop()); 
-
-                    // Iniciar MindAR
-                    sceneEl.setAttribute('visible', 'true');
-                    sceneEl.play();
-                    
-                    // Aquí llamamos a la función start(), que ahora SÍ debería existir.
-                    await mindarComponent.start();
-
-                    // Si MindAR se inicia correctamente, ocultar la UI
-                    sceneEl.addEventListener('mindar-started', () => {
-                        console.log("MindAR iniciado. Ocultando UI.");
-                        // Ocultar la UI con una transición suave
-                        uiContainer.style.opacity = '0';
-                        setTimeout(() => uiContainer.style.display = 'none', 500); 
-                    }, { once: true });
-
-                } catch (error) {
-                    console.error("Fallo al iniciar AR o la cámara:", error);
-                    
-                    let errorMessage = "";
-                    if (error.name === 'NotAllowedError') {
-                        errorMessage = "ERROR: El acceso a la cámara fue denegado por el usuario (o bloqueado por el navegador, intente fuera del iframe).";
-                    } else if (error.name === 'NotFoundError') {
-                        errorMessage = "ERROR: No se encontró una cámara.";
-                    } else if (error.name === 'SecurityError') {
-                        errorMessage = "ERROR DE SEGURIDAD: El navegador está bloqueando la cámara. Intente usar esta URL directamente.";
-                    } else {
-                        errorMessage = `ERROR DESCONOCIDO: ${error.message}.`;
-                    }
-
-                    updateMessage(errorMessage, true);
-                    resetStartButton(true); // Permitir reintento
-                    
-                    // Detener y ocultar la escena en caso de error
-                    sceneEl.setAttribute('visible', 'false');
-                    sceneEl.pause();
-                }
-            };
-
-            // Manejar el clic del botón
-            startButton.addEventListener('click', startAR);
-            
-            // Si MindAR detecta un error de cámara durante la ejecución
-            sceneEl.addEventListener('mindar-camera-error', () => {
-                updateMessage("MindAR Falló: La cámara se perdió o fue denegada durante la ejecución. Reintente.", true);
-                
-                resetStartButton(true);
-                uiContainer.style.display = 'flex';
-                uiContainer.style.opacity = '1';
-                sceneEl.setAttribute('visible', 'false');
-                sceneEl.pause();
-            });
-
+        // Si el navegador pide permisos, la escena se iniciará automáticamente.
+        // Agregamos un listener simple para fines de depuración
+        document.getElementById('scene-container').addEventListener('mindar-camera-error', () => {
+             console.error("MindAR Error: La cámara falló o fue denegada. Intente recargar la página.");
         });
     </script>
 </body>
