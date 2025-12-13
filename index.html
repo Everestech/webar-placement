@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Escaner AR Standalone</title>
+    <title>Escaner AR Standalone Three.js</title>
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,11 +20,11 @@
     </script>
 
     <!-- 1. Librerías CRÍTICAS: MindAR Standalone (Three.js) y Three.js -->
+    <!-- MindAR v1.2.1 expone la clase MindARThree globalmente -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image.prod.js"></script>
 
     <style>
-        /* CRÍTICO: Asegura que el HTML y el BODY ocupen toda la ventana */
         body, html {
             margin: 0;
             padding: 0;
@@ -35,35 +35,17 @@
             background-color: #000;
         }
 
-        /* Contenedor principal que contendrá el video y el canvas */
+        /* Contenedor principal para MindAR */
         #ar-container {
             position: absolute;
             width: 100%;
             height: 100%;
             top: 0;
             left: 0;
+            /* CRÍTICO: Aseguramos que el contenido generado por MindAR (video y canvas) cubra todo */
             display: none; /* Inicialmente oculto */
         }
         
-        /* El elemento de VIDEO (Cámara visible) debe cubrir el fondo */
-        #video-feed {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover; /* Asegura que el video cubra todo sin distorsión excesiva */
-            z-index: 1; 
-        }
-
-        /* El CANVAS de Three.js (AR Overlay) debe estar encima y ser transparente */
-        #ar-canvas {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            z-index: 10; 
-        }
-
         /* Estilos de la capa de inicio */
         #start-overlay {
             position: fixed;
@@ -96,14 +78,14 @@
 
     <!-- 1. CAPA DE INICIO (User Friendly) -->
     <div id="start-overlay">
-        <h1 class="text-4xl font-extrabold text-indigo-400 mb-4 text-center">Escaner de Realidad Aumentada</h1>
+        <h1 class="text-4xl font-extrabold text-indigo-400 mb-4 text-center">Escaner de Realidad Aumentada (Three.js)</h1>
         
         <p id="status-message" class="text-lg text-gray-300 mb-8 text-center max-w-lg">
-            Presiona el botón para activar la cámara. La visualización se hará a pantalla completa.
+            Presiona el botón para activar la cámara. Se espera la inicialización de MindARThree.
         </p>
 
         <button id="startButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 text-xl rounded-full shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer ring-4 ring-green-400">
-            Activar Cámara y Escáner
+            Activar Escáner AR
         </button>
 
         <div class="instructions">
@@ -114,106 +96,103 @@
         </div>
     </div>
 
-    <!-- 2. CONTENEDOR AR con VIDEO y CANVAS -->
-    <div id="ar-container">
-        <!-- El VIDEO de la cámara, visible en todo momento -->
-        <video id="video-feed" autoplay muted playsinline></video>
-        <!-- El CANVAS para el renderizado 3D/AR de Three.js -->
-        <canvas id="ar-canvas"></canvas>
-    </div>
+    <!-- 2. CONTENEDOR AR (MindAR insertará aquí el <video> y el <canvas>) -->
+    <div id="ar-container"></div>
 
     <script>
-        const startButton = document.getElementById('startButton');
-        const startOverlay = document.getElementById('start-overlay');
-        const arContainer = document.getElementById('ar-container');
-        const video = document.getElementById('video-feed');
-        const canvas = document.getElementById('ar-canvas');
-        const statusMessage = document.getElementById('status-message');
-
-        // Función que inicia el escáner AR
-        const startScanner = async () => {
+        // CRÍTICO: Esperar a que todo el DOM y las librerías se carguen
+        window.onload = function () {
             
-            // 1. Mostrar el contenedor AR (que incluye la cámara)
-            arContainer.style.display = 'block';
+            const startButton = document.getElementById('startButton');
+            const startOverlay = document.getElementById('start-overlay');
+            const arContainer = document.getElementById('ar-container');
+            const statusMessage = document.getElementById('status-message');
 
-            // 2. Ocultar la capa de inicio
-            startOverlay.style.opacity = '0';
-            setTimeout(() => { 
-                startOverlay.style.display = 'none'; 
-            }, 500); 
-
-            try {
-                // 3. Inicializar MindAR con Three.js
-                // Usamos la biblioteca MindARThree que requiere el canvas y el video
-                const mindarThree = new MindARThree.MindARThree({
-                    container: arContainer, // Contenedor que contiene el video y el canvas
-                    imageTargetSrc: "https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind",
-                    // Forzamos el uso de nuestros elementos de video y canvas
-                    uiLoading: "no",
-                    uiError: "no"
-                });
-
-                const { renderer, scene, camera } = mindarThree;
-
-                // --- 4. CONFIGURACIÓN DE OBJETOS 3D (Three.js) ---
-
-                // CUBO 3D (Flotando, de frente al espectador)
-                const cubeGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-                const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.9 });
-                const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-                cube.position.y = 0.05; // Posición ligeramente sobre el marcador
-                // El cubo tiene la rotación por defecto (de frente)
-
-                // PLANO VERDE (Acostado en la misma orientación que el marcador)
-                const planeGeometry = new THREE.PlaneGeometry(1, 0.65); // Tamaño del marcador
-                const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
-                const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            // Función que inicia el escáner AR
+            const startScanner = async () => {
                 
-                // CRÍTICO: Rotar el plano 90 grados alrededor del eje X para que quede PLANA sobre el marcador (Plano XZ)
-                plane.rotation.x = Math.PI * 0.5; 
-                plane.position.z = 0.01; // Ligeramente levantado para evitar Z-fighting con el marcador
+                // 1. Mostrar el contenedor AR
+                arContainer.style.display = 'block';
 
-                // Agregar animación de rotación al cubo
-                const clock = new THREE.Clock();
-                function animate() {
-                    const delta = clock.getDelta();
-                    cube.rotation.y += delta * 1.5; // Rotación lenta alrededor del eje Y
-                    renderer.render(scene, camera);
-                    requestAnimationFrame(animate);
+                // 2. Ocultar la capa de inicio
+                startOverlay.style.opacity = '0';
+                setTimeout(() => { 
+                    startOverlay.style.display = 'none'; 
+                }, 500); 
+
+                try {
+                    // CRÍTICO: La clase se llama MindARThree, tal como se corrigió.
+                    if (typeof MindARThree === 'undefined') {
+                        throw new Error("MindARThree no está definido. La librería no cargó correctamente.");
+                    }
+
+                    // 3. Inicializar MindAR con Three.js
+                    const mindarThree = new MindARThree.MindARThree({
+                        container: arContainer, // MindAR insertará su propio video y canvas aquí
+                        imageTargetSrc: "https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind",
+                        uiLoading: "no",
+                        uiError: "no"
+                    });
+
+                    const { renderer, scene, camera } = mindarThree;
+
+                    // --- 4. CONFIGURACIÓN DE OBJETOS 3D (Three.js) ---
+
+                    // CUBO 3D (Flotando)
+                    const cubeGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+                    const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.9 });
+                    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+                    cube.position.y = 0.05; 
+
+                    // PLANO VERDE (Acostado en la misma orientación que el marcador)
+                    const planeGeometry = new THREE.PlaneGeometry(1, 0.65); 
+                    const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+                    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+                    
+                    // CRÍTICO: Rotar el plano 90 grados (Math.PI / 2) alrededor del eje X para que quede PLANA (Plano XZ)
+                    plane.rotation.x = Math.PI * 0.5; 
+                    plane.position.z = 0.001; // Posición para evitar z-fighting
+
+                    // Agregar animación de rotación al cubo
+                    const clock = new THREE.Clock();
+                    function animate() {
+                        const delta = clock.getDelta();
+                        cube.rotation.y += delta * 1.5; 
+                        renderer.render(scene, camera);
+                        requestAnimationFrame(animate);
+                    }
+
+                    // --- 5. LÓGICA DE DETECCIÓN Y POSICIONAMIENTO ---
+
+                    const anchor = mindarThree.addAnchor(0); 
+                    anchor.group.add(cube);
+                    anchor.group.add(plane);
+
+                    // 6. Iniciar AR y el bucle de renderizado
+                    await mindarThree.start();
+                    animate();
+
+                } catch (err) {
+                    console.error("Error al iniciar MindAR o la cámara: ", err);
+                    
+                    // Mostrar error en la interfaz
+                    startOverlay.style.opacity = '1';
+                    startOverlay.style.display = 'flex';
+                    arContainer.style.display = 'none';
+
+                    statusMessage.innerHTML = `
+                        <div class="bg-red-700 text-white p-4 rounded-lg shadow-xl text-center">
+                            ⚠️ Error CRÍTICO: No se pudo iniciar el AR. (${err.message})
+                            <br>Asegúrate de tener un navegador compatible y permitir la cámara.
+                        </div>
+                    `;
+                    startButton.style.display = 'none';
                 }
+            };
 
-                // --- 5. LÓGICA DE DETECCIÓN Y POSICIONAMIENTO ---
-
-                const anchor = mindarThree.addAnchor(0); // El primer marcador en el archivo .mind
-                anchor.group.add(cube);
-                anchor.group.add(plane);
-
-                // Inicio de AR
-                await mindarThree.start();
-
-                // 6. Iniciar el bucle de renderizado de Three.js
-                animate();
-
-            } catch (err) {
-                console.error("Error al iniciar MindAR o la cámara: ", err);
-                
-                // Mostrar la capa de inicio de nuevo para mostrar el error
-                startOverlay.style.opacity = '1';
-                startOverlay.style.display = 'flex';
-                arContainer.style.display = 'none';
-
-                statusMessage.innerHTML = `
-                    <div class="bg-red-700 text-white p-4 rounded-lg shadow-xl text-center">
-                        ⚠️ Error CRÍTICO: No se pudo acceder o iniciar la cámara. (${err.message})
-                        <br>Asegúrate de permitir el acceso a la cámara.
-                    </div>
-                `;
-                startButton.style.display = 'none';
-            }
-        };
-
-        // Escuchar el gesto de usuario (click) para iniciar
-        startButton.addEventListener('click', startScanner);
+            // Escuchar el gesto de usuario (click) para iniciar
+            startButton.addEventListener('click', startScanner);
+        }
     </script>
 </body>
 </html>
