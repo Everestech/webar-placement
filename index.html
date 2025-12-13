@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR: Activación Reforzada de Cámara MindAR</title>
+    <title>WebAR: Método Directo de Activación de Cámara (Probado)</title>
     
     <!-- Tailwind CSS CDN para un estilo básico de UI/Mensajes -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,11 +11,6 @@
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        secondary: '#10b981',
-                        danger: '#ef4444',
-                    },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
                     },
@@ -40,7 +35,7 @@
             font-family: 'Inter', sans-serif;
         }
 
-        /* Contenedor de la interfaz de usuario (Botón y Mensajes) */
+        /* Contenedor de la interfaz de usuario (Botón) */
         #ui-overlay {
             position: fixed;
             top: 0;
@@ -56,16 +51,19 @@
             transition: opacity 0.5s ease;
         }
 
-        /* Estilo para el mensaje de estado que aparece arriba */
+        /* El mensaje de estado es muy simple para esta versión */
         #status-message {
             position: fixed;
-            top: 1rem;
+            bottom: 1rem;
             left: 50%;
             transform: translateX(-50%);
             z-index: 1000;
-            pointer-events: none;
-            opacity: 0; /* Inicialmente oculto */
-            transition: opacity 0.3s ease;
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none; /* Inicialmente oculto */
         }
     </style>
 </head>
@@ -73,25 +71,24 @@
     
     <!-- Contenedor de la interfaz inicial (Botón) -->
     <div id="ui-overlay" class="p-4 text-center">
-        <h1 class="text-3xl font-bold text-white mb-6">Iniciar Experiencia AR</h1>
-        <p id="ui-message" class="text-gray-300 mb-8 max-w-sm">Cargando escena 3D...</p>
-        <button id="startButton" disabled class="bg-gray-500 text-white font-bold py-3 px-8 rounded-full shadow-xl transition duration-300 focus:outline-none focus:ring-4 focus:ring-gray-400 cursor-not-allowed">
-            <svg class="inline w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m1.58-1.58H9m1.29 1.29l1.41-1.41m0 0l-1.41-1.41M12 21h5a2 2 0 002-2v-5m-1.29-1.29l1.41 1.41m0 0l1.41 1.41M20 3a1 1 0 00-1-1h-5.582m-1.58 1.58H15m-1.29-1.29l-1.41 1.41m0 0l1.41 1.41M3 19a1 1 0 001 1h5.582m1.58-1.58H9m-1.29 1.29l-1.41-1.41m0 0l-1.41-1.41"></path></svg>
-            Cargando...
+        <h1 class="text-3xl font-bold text-white mb-6">Iniciar AR</h1>
+        <p id="ui-message" class="text-gray-300 mb-8 max-w-sm">Presiona el botón para solicitar el acceso a la cámara y comenzar.</p>
+        <button id="startButton" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-xl transition duration-300 cursor-pointer">
+            Activar Cámara
         </button>
     </div>
 
-    <!-- Mensaje de estado AR superpuesto -->
-    <div id="status-message" class="bg-primary text-white font-bold py-2 px-4 rounded-xl shadow-lg">
-        Preparando escena...
+    <!-- Mensaje de estado simple -->
+    <div id="status-message">
+        Cargando...
     </div>
 
     <a-scene 
         id="scene-container"
-        /* CRÍTICO: autoStart: false para esperar el click del usuario */
+        /* Mantenemos el autoStart: false para control manual */
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false" 
         
-        /* CRÍTICO: alpha: true para permitir la transparencia y ver el video de fondo */
+        /* Aseguramos la transparencia */
         renderer="alpha: true, antialias: true"
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false"
@@ -106,8 +103,6 @@
 
         <!-- Contenido AR para el primer target (Índice 0) -->
         <a-entity mindar-image-target="targetIndex: 0">
-            
-            <!-- El modelo 3D que se mostrará sobre el marcador -->
             <a-gltf-model 
                 rotation="0 0 0 " 
                 position="0 0 0.1" 
@@ -115,7 +110,6 @@
                 src="#avatarModel" 
             >
             </a-gltf-model>
-            
         </a-entity>
     </a-scene>
 
@@ -123,96 +117,53 @@
         const sceneEl = document.getElementById('scene-container');
         const startButton = document.getElementById('startButton');
         const uiOverlay = document.getElementById('ui-overlay');
-        const uiMessage = document.getElementById('ui-message');
         const statusMessage = document.getElementById('status-message');
         
-        let mindarComponent = null;
-
-        // Función para mostrar mensajes de estado temporal
-        const updateStatus = (text, colorClass, duration = 3000) => {
+        // Función para mostrar el estado
+        const showStatus = (text) => {
             statusMessage.textContent = text;
-            statusMessage.className = `bg-${colorClass} text-white font-bold py-2 px-4 rounded-xl shadow-lg`;
-            statusMessage.style.opacity = '1';
-            
-            if (duration > 0) {
-                setTimeout(() => {
-                    statusMessage.style.opacity = '0';
-                }, duration);
-            }
+            statusMessage.style.display = 'block';
         };
 
-        // --- 1. Inicialización y Preparación ---
-        sceneEl.addEventListener('loaded', () => {
-            console.log("A-Frame Scene Loaded.");
+        // Escuchamos el click del usuario en el botón de inicio
+        startButton.addEventListener('click', async () => {
             
-            // CRÍTICO: Forzar el fondo del lienzo 3D a transparente para ver el video
-            const canvas = sceneEl.canvas;
-            if (canvas) {
-                canvas.style.backgroundColor = 'transparent';
-                console.log("Canvas de A-Frame configurado como transparente.");
-            }
+            // 1. Mostrar mensaje de inicio
+            showStatus("Solicitando cámara...");
             
-            // Obtener la instancia del componente MindAR
-            mindarComponent = sceneEl.components['mindar-image'];
-            
-            if (!mindarComponent) {
-                updateStatus("ERROR CRÍTICO: MindAR no se cargó correctamente.", 'danger', 0);
-                uiMessage.textContent = "Error de inicialización. Revise la consola.";
-                console.error("MindAR component is null after scene loaded.");
-                return;
-            }
+            // Ocultar el overlay
+            uiOverlay.style.opacity = '0';
+            setTimeout(() => { uiOverlay.style.display = 'none'; }, 500);
 
-            // Actualizar la UI para indicar que está lista para el usuario
-            uiMessage.textContent = "La escena AR está lista. Presione para activar la cámara.";
-            startButton.textContent = 'Activar Cámara AR';
-            startButton.disabled = false;
-            startButton.classList.remove('bg-gray-500', 'cursor-not-allowed', 'animate-spin');
-            startButton.classList.add('bg-primary', 'hover:bg-blue-700', 'cursor-pointer');
-            
-            // --- 2. Función de Inicio Activada por Gesto de Usuario (EL MÉTODO PERFECTO) ---
-            const startAR = async () => {
-                // Ocultar la capa de inicio
-                uiOverlay.style.opacity = '0';
-                setTimeout(() => { uiOverlay.style.display = 'none'; }, 500);
-
-                // Mostrar estado de solicitud
-                updateStatus("Solicitando permisos de cámara...", 'primary', 5000);
+            try {
+                // 2. Obtener la instancia del componente MindAR
+                const mindarComponent = sceneEl.components['mindar-image'];
                 
-                try {
-                    // LLAMADA CLAVE: Iniciar MindAR manualmente con el gesto de usuario
-                    await mindarComponent.start(); 
-                    console.log("MindAR iniciado con éxito.");
-                    updateStatus("¡CÁMARA ACTIVA! Busque el marcador.", 'secondary', 5000);
-
-                } catch (error) {
-                    console.error("Error al iniciar MindAR o la cámara:", error);
-                    let errorMessage = "ERROR: La cámara falló o fue denegada.";
-                    
-                    // Si el error tiene un nombre o mensaje conocido, lo mostramos
-                    if (error.name === "NotAllowedError" || error.message.includes("denied")) {
-                         errorMessage = "ACCESO DENEGADO: Debe permitir el uso de la cámara en su navegador.";
-                    } else if (error.name === "NotFoundError") {
-                         errorMessage = "NO ENCONTRADA: No se detectó una cámara disponible.";
-                    }
-
-                    updateStatus(errorMessage + " Por favor, recargue y verifique los permisos.", 'danger', 0);
-                    // Mostrar nuevamente el overlay con el error para que el usuario pueda interactuar o recargar
-                    uiOverlay.style.display = 'flex';
-                    uiOverlay.style.opacity = '1';
-                    uiMessage.innerHTML = `<span class="text-danger font-bold">${errorMessage}</span><br>Asegúrese de que su navegador no tiene permisos bloqueados para este sitio.`;
-                    startButton.textContent = 'Recargar para reintentar';
-                    startButton.onclick = () => window.location.reload();
+                if (!mindarComponent) {
+                    throw new Error("MindAR component not found.");
                 }
-            };
-            
-            // Adjuntar listener al botón
-            startButton.addEventListener('click', startAR);
-        });
 
-        // --- 3. Feedback de Estado MindAR para errores no capturados en el try/catch ---
-        sceneEl.addEventListener('mindar-camera-error', () => {
-             console.error("MindAR Event Error: La cámara falló o fue denegada (Evento de A-Frame).");
-             updateStatus("ERROR AR: Fallo de la cámara detectado por el evento de A-Frame.", 'danger', 0);
+                // 3. LLAMADA CLAVE: Iniciar MindAR manualmente
+                await mindarComponent.start(); 
+                
+                console.log("MindAR iniciado con éxito.");
+                showStatus("¡CÁMARA ACTIVA! Busque el marcador.");
+                setTimeout(() => { statusMessage.style.display = 'none'; }, 5000);
+
+            } catch (error) {
+                console.error("ERROR AL INICIAR LA CÁMARA:", error);
+                
+                // Si falla, volvemos a mostrar el overlay con un mensaje de error simple
+                uiOverlay.style.display = 'flex';
+                uiOverlay.style.opacity = '1';
+                document.getElementById('ui-message').innerHTML = `<span class="text-red-400 font-bold">ERROR: La cámara falló o fue denegada.</span> Por favor, recargue la página y asegúrese de aceptar los permisos.`;
+                startButton.textContent = 'Recargar para reintentar';
+                startButton.classList.remove('bg-green-500');
+                startButton.classList.add('bg-red-500');
+                startButton.onclick = () => window.location.reload();
+                
+                showStatus("ERROR DE CÁMARA. Permisos denegados.");
+            }
         });
         
     </script>
