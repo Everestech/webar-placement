@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Escaner de Marcador FullScreen</title>
+    <title>Escaner AR FullScreen Corregido</title>
     
-    <!-- Tailwind CSS CDN para un estilo limpio y adaptable -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -19,7 +19,7 @@
         }
     </script>
 
-    <!-- 1. Librerías de MindAR y A-Frame -->
+    <!-- Librerías de MindAR y A-Frame -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
     <!-- MindAR para A-Frame (Image Tracking) -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image-aframe.prod.js"></script>
@@ -33,23 +33,29 @@
             height: 100%;
             overflow: hidden;
             font-family: 'Inter', sans-serif;
-            background-color: #000; /* Fondo negro para evitar el blanco parpadeante */
+            background-color: #000;
         }
         
-        /* CRÍTICO: Asegura que la escena AR ocupe el 100% del viewport */
+        /* CRÍTICO: Asegura que la escena AR de MindAR ocupe el 100% del viewport */
         #ar-scene {
             width: 100%;
             height: 100%;
             display: block;
             visibility: hidden; 
-            /* Forzar el posicionamiento absoluto/fijo para cubrir toda la pantalla */
+            /* Posicionamiento fijo para forzar la cobertura total */
             position: fixed; 
             top: 0;
             left: 0;
-            z-index: 1; /* Bajo z-index para que la capa de inicio esté encima */
+            z-index: 1; 
+        }
+
+        /* CRÍTICO: Asegura que el CANVAS de A-FRAME interno también se estire al 100% */
+        #ar-scene .a-canvas {
+            width: 100% !important;
+            height: 100% !important;
         }
         
-        /* ESTILO PARA LA CAPA DE INICIO (Debe ser FULL-SCREEN y encima de todo) */
+        /* Estilos de la capa de inicio */
         #start-overlay {
             position: fixed;
             top: 0;
@@ -60,7 +66,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 100; /* Alto z-index para estar encima de la escena AR */
+            z-index: 100;
             background-color: rgba(17, 24, 39, 0.98); 
             padding: 1rem;
             transition: opacity 0.5s ease;
@@ -73,73 +79,78 @@
             margin-top: 2rem;
             border: 1px solid #374151;
             max-width: 90%;
-            text-align: left;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <!-- 1. CAPA DE INICIO A PANTALLA COMPLETA (USER FRIENDLY) -->
+    <!-- 1. CAPA DE INICIO (User Friendly) -->
     <div id="start-overlay">
-        <h1 class="text-3xl font-extrabold text-white mb-6 text-center">Inicia la Realidad Aumentada</h1>
+        <h1 class="text-4xl font-extrabold text-indigo-400 mb-4 text-center">Realidad Aumentada con Marcador</h1>
         
         <p id="status-message" class="text-lg text-gray-300 mb-8 text-center max-w-lg">
-            Presiona "Iniciar Escáner" para activar tu cámara y comenzar la detección del marcador.
+            ¡Prepárate! Presiona el botón para activar la cámara a pantalla completa e iniciar el escaneo AR.
         </p>
 
-        <button id="startButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 text-xl rounded-xl shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer">
-            Iniciar Escáner
+        <button id="startButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 text-xl rounded-full shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer ring-4 ring-green-400">
+            Activar Cámara y Escáner
         </button>
 
         <div class="instructions">
-            <p class="font-semibold text-xl mb-3 text-yellow-400">Marcador a Usar (Card Example):</p>
-            <p class="text-sm">Prepara la siguiente imagen. El contenido AR se superpondrá a ella cuando se detecte.</p>
-            <!-- Imagen de referencia para el usuario -->
-            <img class="mt-4 rounded-lg shadow-md max-w-full h-auto mx-auto" style="max-height: 150px;" 
+            <p class="font-semibold text-xl mb-3 text-yellow-400">Marcador Requerido:</p>
+            <img class="mt-4 rounded-lg shadow-md max-w-full h-auto mx-auto border-2 border-white" style="max-height: 150px;" 
                  src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
                  alt="Imagen del marcador Card-Example" />
         </div>
     </div>
 
-    <!-- 2. ESCENA MINDAR DE A-FRAME (Full Screen) -->
+    <!-- 2. ESCENA MINDAR DE A-FRAME (Full Screen Camera) -->
     <a-scene 
         id="ar-scene"
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; filterMinCF:0.0001; filterBeta: 0.001;"
         embedded 
-        color-space="srgb" 
-        renderer="colorManagement: true, physicallyCorrectLights: true"
+        renderer="colorManagement: true, physicallyCorrectLights: true, alpha: true"
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false">
+        <!-- CRÍTICO: Añadir alpha: true al renderer puede ayudar a asegurar que el fondo de video se muestre correctamente -->
 
-        <!-- 3. Contenido AR: Plano y Texto DE FRENTE al espectador (sin rotación, plano sobre el marcador) -->
+        <!-- 3. Contenido AR en el Target (Index 0) -->
         <a-entity mindar-image-target="targetIndex: 0">
             
-            <!-- OBJETO 3D (Un cubo que queda 'de frente' al espectador, flotando sobre el marcador) -->
-            <!-- Sin rotación especial, así que aparecerá orientado a la cámara (Z-forward) -->
+            <!-- CUBO 3D FLOTANTE (De Frente al espectador) -->
+            <!-- Rotación 0 0 0 (se orienta automáticamente hacia la cámara) -->
             <a-box 
-                position="0 0.5 0" 
+                position="0 0.25 0" 
                 rotation="0 0 0" 
-                scale="0.3 0.3 0.3"
-                material="color: #6366f1; opacity: 0.8;"></a-box>
+                scale="0.2 0.2 0.2"
+                material="color: #6366f1; opacity: 0.9;">
+                <a-animation attribute="rotation"
+                            dur="3000"
+                            to="0 360 0"
+                            easing="linear"
+                            repeat="indefinite"></a-animation>
+            </a-box>
             
-            <!-- Texto que queda 'de frente' al espectador, flotando encima -->
-            <a-text 
-                value="¡Detección Exitosa!" 
-                position="0 0.8 0" 
-                align="center" 
-                width="1.5" 
-                color="#FFFFFF" 
-                rotation="0 0 0">
-            </a-text>
-
-            <!-- Un plano acostado sobre el marcador (Plano "sticker") -->
+            <!-- PLANO VERDE (Acostado, en la misma orientación que el marcador) -->
+            <!-- CRÍTICO: La rotación -90 0 0 lo coloca plano sobre el plano XY del marcador. -->
             <a-plane 
                 rotation="-90 0 0" 
                 width="1" 
                 height="0.65" 
-                position="0 0 0.01" 
-                material="color: #4ade80; opacity: 0.5; side: double">
+                position="0 0 0" 
+                material="color: #4ade80; opacity: 0.6; side: double">
             </a-plane>
+
+            <!-- Texto de Confirmación (De Frente al espectador) -->
+            <a-text 
+                value="OBJETO AR ACTIVO" 
+                position="0 0.45 0" 
+                align="center" 
+                width="1.2" 
+                color="#FFFFFF" 
+                rotation="0 0 0">
+            </a-text>
 
         </a-entity>
 
@@ -172,7 +183,7 @@
                 startOverlay.style.display = 'flex';
                 document.getElementById('status-message').innerHTML = `
                     <div class="bg-red-700 text-white p-4 rounded-lg shadow-xl">
-                        Error al iniciar la cámara. Asegúrese de que su navegador permite el acceso. (${err.name})
+                        Error al iniciar la cámara. Asegúrese de permitir el acceso a la cámara. (${err.name})
                         <br>Por favor, recargue la página.
                     </div>
                 `;
