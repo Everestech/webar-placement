@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR: Cámara Simple y Marcadores</title>
+    <title>WebAR: Cámara Reforzada y Marcadores</title>
     
     <!-- Tailwind CSS CDN para un estilo básico de UI/Mensajes -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -52,9 +52,10 @@
             align-items: center;
             z-index: 20; 
             background-color: rgba(31, 41, 55, 0.95);
+            transition: opacity 0.5s ease;
         }
 
-        /* Estilo para el mensaje de estado que aparece una vez iniciado */
+        /* Estilo para el mensaje de estado que aparece arriba */
         #status-message {
             position: fixed;
             top: 1rem;
@@ -62,6 +63,7 @@
             transform: translateX(-50%);
             z-index: 1000;
             pointer-events: none;
+            opacity: 0; /* Inicialmente oculto */
             transition: opacity 0.3s ease;
         }
     </style>
@@ -79,8 +81,8 @@
     </div>
 
     <!-- Mensaje de estado AR superpuesto -->
-    <div id="status-message" class="hidden bg-primary text-white font-bold py-2 px-4 rounded-xl shadow-lg opacity-0">
-        Cargando experiencia...
+    <div id="status-message" class="bg-primary text-white font-bold py-2 px-4 rounded-xl shadow-lg">
+        Preparando escena...
     </div>
 
     <a-scene 
@@ -122,48 +124,66 @@
         const uiOverlay = document.getElementById('ui-overlay');
         const statusMessage = document.getElementById('status-message');
         
-        // --- 1. Garantizar la Transparencia del Canvas ---
-        // Esto es CRÍTICO para ver el video de la cámara. A-Frame crea el canvas.
+        let mindarComponent = null;
+
+        // Función para mostrar mensajes de estado
+        const updateStatus = (text, colorClass) => {
+            statusMessage.textContent = text;
+            statusMessage.className = 'bg-' + colorClass + ' text-white font-bold py-2 px-4 rounded-xl shadow-lg';
+            statusMessage.style.opacity = '1';
+        };
+
+        // --- 1. Inicialización y Preparación ---
         sceneEl.addEventListener('loaded', () => {
+            console.log("A-Frame Scene Loaded.");
+            
+            // CRÍTICO: Forzar el fondo del lienzo 3D a transparente para ver el video
             const canvas = sceneEl.canvas;
             if (canvas) {
-                // Forzar el fondo del lienzo 3D a transparente
                 canvas.style.backgroundColor = 'transparent';
                 console.log("Canvas de A-Frame configurado como transparente.");
             }
-        });
-        
-        // --- 2. Función de Inicio Activada por Gesto de Usuario ---
-        const startAR = () => {
-            // Ocultar la capa de inicio y mostrar el mensaje de estado
-            uiOverlay.style.display = 'none';
-            statusMessage.classList.remove('hidden');
-            setTimeout(() => { statusMessage.style.opacity = '1'; }, 10);
             
-            // Iniciar MindAR para forzar la activación de la cámara.
-            statusMessage.textContent = "Solicitando permisos de cámara...";
-            sceneEl.start(); 
-        };
+            // Obtener la instancia del componente MindAR
+            mindarComponent = sceneEl.components['mindar-image'];
+            
+            // --- 2. Función de Inicio Activada por Gesto de Usuario (EL MÉTODO PERFECTO) ---
+            const startAR = async () => {
+                if (!mindarComponent) {
+                    updateStatus("ERROR: Componente MindAR no encontrado.", 'red-600');
+                    console.error("MindAR component not found.");
+                    return;
+                }
+                
+                // Ocultar la capa de inicio
+                uiOverlay.style.opacity = '0';
+                setTimeout(() => { uiOverlay.style.display = 'none'; }, 500);
 
-        // Event listener para el botón de inicio
-        startButton.addEventListener('click', startAR);
+                // Mostrar estado de solicitud
+                updateStatus("Solicitando permisos de cámara...", 'primary');
+                
+                try {
+                    // LLAMADA CLAVE: Iniciar MindAR manualmente con el gesto de usuario
+                    await mindarComponent.start(); 
+                    console.log("MindAR iniciado con éxito.");
+                    updateStatus("¡CÁMARA ACTIVA! Busque el marcador.", 'secondary');
 
-        // --- 3. Feedback de Estado ---
-
-        // Cuando MindAR termina de cargar y la cámara está (o debería estar) activa
-        sceneEl.addEventListener('mindar-started', () => {
-             console.log("MindAR iniciado. Cámara activa.");
-             statusMessage.classList.remove('bg-primary');
-             statusMessage.classList.add('bg-secondary');
-             statusMessage.textContent = "¡CÁMARA ACTIVA! Busque el marcador.";
+                } catch (error) {
+                    console.error("Error al iniciar MindAR o la cámara:", error);
+                    updateStatus("ERROR: La cámara falló o fue denegada.", 'red-600');
+                }
+            };
+            
+            // Adjuntar listener al botón solo después de que la escena esté lista
+            startButton.addEventListener('click', startAR);
+            startButton.textContent = 'Activar Cámara AR'; // Restaurar texto si cambió
+            startButton.disabled = false;
         });
 
-        // En caso de error de la cámara
+        // --- 3. Feedback de Estado MindAR ---
         sceneEl.addEventListener('mindar-camera-error', () => {
              console.error("MindAR Error: La cámara falló o fue denegada.");
-             statusMessage.classList.remove('bg-primary', 'bg-secondary');
-             statusMessage.classList.add('bg-red-600');
-             statusMessage.textContent = "ERROR: La cámara falló. Active permisos en el navegador.";
+             updateStatus("ERROR: La cámara falló. Active permisos en el navegador.", 'red-600');
         });
         
     </script>
