@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Escaner de Marcador MindAR</title>
+    <title>Escaner de Marcador FullScreen</title>
     
-    <!-- Tailwind CSS CDN para un estilo limpio -->
+    <!-- Tailwind CSS CDN para un estilo limpio y adaptable -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -25,6 +25,7 @@
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
+        /* CRÍTICO: Asegura que el HTML y el BODY ocupen toda la ventana */
         body, html {
             margin: 0;
             padding: 0;
@@ -32,17 +33,23 @@
             height: 100%;
             overflow: hidden;
             font-family: 'Inter', sans-serif;
+            background-color: #000; /* Fondo negro para evitar el blanco parpadeante */
         }
         
-        /* Asegura que la escena AR ocupe la totalidad de la pantalla */
+        /* CRÍTICO: Asegura que la escena AR ocupe el 100% del viewport */
         #ar-scene {
             width: 100%;
             height: 100%;
             display: block;
-            visibility: hidden; /* Oculto hasta que se presione el botón */
+            visibility: hidden; 
+            /* Forzar el posicionamiento absoluto/fijo para cubrir toda la pantalla */
+            position: fixed; 
+            top: 0;
+            left: 0;
+            z-index: 1; /* Bajo z-index para que la capa de inicio esté encima */
         }
         
-        /* ESTILO PARA LA CAPA DE INICIO (Debe ser FULL-SCREEN) */
+        /* ESTILO PARA LA CAPA DE INICIO (Debe ser FULL-SCREEN y encima de todo) */
         #start-overlay {
             position: fixed;
             top: 0;
@@ -53,8 +60,8 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 100; 
-            background-color: rgba(17, 24, 39, 0.98); /* Fondo oscuro completo */
+            z-index: 100; /* Alto z-index para estar encima de la escena AR */
+            background-color: rgba(17, 24, 39, 0.98); 
             padding: 1rem;
             transition: opacity 0.5s ease;
         }
@@ -72,12 +79,12 @@
 </head>
 <body>
 
-    <!-- 1. CAPA DE INICIO A PANTALLA COMPLETA -->
+    <!-- 1. CAPA DE INICIO A PANTALLA COMPLETA (USER FRIENDLY) -->
     <div id="start-overlay">
-        <h1 class="text-3xl font-extrabold text-white mb-6 text-center">¡Cámara Lista! Active el Escáner AR</h1>
+        <h1 class="text-3xl font-extrabold text-white mb-6 text-center">Inicia la Realidad Aumentada</h1>
         
         <p id="status-message" class="text-lg text-gray-300 mb-8 text-center max-w-lg">
-            Presione el botón para solicitar los permisos de la cámara e iniciar la detección de imágenes.
+            Presiona "Iniciar Escáner" para activar tu cámara y comenzar la detección del marcador.
         </p>
 
         <button id="startButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 text-xl rounded-xl shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer">
@@ -85,17 +92,16 @@
         </button>
 
         <div class="instructions">
-            <p class="font-semibold text-xl mb-3 text-yellow-400">Marcador a Usar:</p>
-            <p class="text-sm">Apunte la cámara a la siguiente imagen. Puede buscarla en Google para apuntarle con otro dispositivo.</p>
-            <!-- Imagen de referencia para el usuario (No es el marcador real, solo una guía) -->
+            <p class="font-semibold text-xl mb-3 text-yellow-400">Marcador a Usar (Card Example):</p>
+            <p class="text-sm">Prepara la siguiente imagen. El contenido AR se superpondrá a ella cuando se detecte.</p>
+            <!-- Imagen de referencia para el usuario -->
             <img class="mt-4 rounded-lg shadow-md max-w-full h-auto mx-auto" style="max-height: 150px;" 
                  src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
                  alt="Imagen del marcador Card-Example" />
         </div>
     </div>
 
-    <!-- 2. ESCENA MINDAR DE A-FRAME (Inicialmente oculta) -->
-    <!-- Utilizamos la configuración de MindAR para Image Tracking y apuntamos al archivo .mind -->
+    <!-- 2. ESCENA MINDAR DE A-FRAME (Full Screen) -->
     <a-scene 
         id="ar-scene"
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; filterMinCF:0.0001; filterBeta: 0.001;"
@@ -105,30 +111,36 @@
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false">
 
-        <a-assets>
-             <!-- Puedes agregar assets 3D aquí si los necesitas -->
-        </a-assets>
-
-        <!-- 3. Contenido AR que aparece sobre la tarjeta detectada (Target Index 0) -->
+        <!-- 3. Contenido AR: Plano y Texto DE FRENTE al espectador (sin rotación, plano sobre el marcador) -->
         <a-entity mindar-image-target="targetIndex: 0">
-            <!-- Un plano verde para demostrar la detección -->
+            
+            <!-- OBJETO 3D (Un cubo que queda 'de frente' al espectador, flotando sobre el marcador) -->
+            <!-- Sin rotación especial, así que aparecerá orientado a la cámara (Z-forward) -->
+            <a-box 
+                position="0 0.5 0" 
+                rotation="0 0 0" 
+                scale="0.3 0.3 0.3"
+                material="color: #6366f1; opacity: 0.8;"></a-box>
+            
+            <!-- Texto que queda 'de frente' al espectador, flotando encima -->
+            <a-text 
+                value="¡Detección Exitosa!" 
+                position="0 0.8 0" 
+                align="center" 
+                width="1.5" 
+                color="#FFFFFF" 
+                rotation="0 0 0">
+            </a-text>
+
+            <!-- Un plano acostado sobre el marcador (Plano "sticker") -->
             <a-plane 
                 rotation="-90 0 0" 
                 width="1" 
-                height="0.5" 
-                position="0 0 0.2" 
-                material="color: green; opacity: 0.9; side: double">
+                height="0.65" 
+                position="0 0 0.01" 
+                material="color: #4ade80; opacity: 0.5; side: double">
             </a-plane>
-            
-            <!-- Un texto flotante encima -->
-            <a-text 
-                value="¡MARCADOR DETECTADO!" 
-                position="0 0.3 0.1" 
-                align="center" 
-                width="1.5" 
-                color="#FFD700" 
-                rotation="-90 0 0">
-            </a-text>
+
         </a-entity>
 
         <!-- Cámara de A-Frame/MindAR -->
@@ -146,39 +158,26 @@
             // 1. Mostrar la escena AR
             arScene.style.visibility = 'visible';
             
-            // 2. Ocultar la capa de inicio (FULL-SCREEN)
+            // 2. Ocultar la capa de inicio con transición
             startOverlay.style.opacity = '0';
             setTimeout(() => { 
                 startOverlay.style.display = 'none'; 
-            }, 500); // 500ms para que la transición de opacidad se complete
-
-            // MindAR maneja automáticamente la solicitud de cámara/video
-            // al cambiar la visibilidad de la escena.
-            
-            // Opcional: Escuchar un evento de MindAR para confirmación
-            arScene.addEventListener('mindar-started', () => {
-                console.log("MindAR se ha iniciado y está buscando el marcador.");
-            });
-            arScene.addEventListener('targetFound', (event) => {
-                console.log(`Marcador ${event.detail.targetIndex} encontrado!`);
-            });
-            arScene.addEventListener('targetLost', (event) => {
-                console.log(`Marcador ${event.detail.targetIndex} perdido.`);
-            });
+            }, 500); 
 
             // Manejo de errores de inicio
             arScene.addEventListener('ar-error', (err) => {
                 console.error("MindAR Error: ", err);
-                // Mostrar un mensaje de error en pantalla
+                // Mostrar la capa de inicio de nuevo para mostrar el error
                 startOverlay.style.opacity = '1';
                 startOverlay.style.display = 'flex';
                 document.getElementById('status-message').innerHTML = `
                     <div class="bg-red-700 text-white p-4 rounded-lg shadow-xl">
-                        Error al iniciar la cámara. Asegúrese de que su navegador permite el acceso a la cámara. (${err.name})
+                        Error al iniciar la cámara. Asegúrese de que su navegador permite el acceso. (${err.name})
                         <br>Por favor, recargue la página.
                     </div>
                 `;
                 startButton.style.display = 'none';
+                arScene.style.visibility = 'hidden';
             });
         };
 
