@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR: Cámara Reforzada y Marcadores</title>
+    <title>WebAR: Activación Reforzada de Cámara MindAR</title>
     
     <!-- Tailwind CSS CDN para un estilo básico de UI/Mensajes -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +14,7 @@
                     colors: {
                         primary: '#3b82f6',
                         secondary: '#10b981',
+                        danger: '#ef4444',
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -73,10 +74,10 @@
     <!-- Contenedor de la interfaz inicial (Botón) -->
     <div id="ui-overlay" class="p-4 text-center">
         <h1 class="text-3xl font-bold text-white mb-6">Iniciar Experiencia AR</h1>
-        <p class="text-gray-300 mb-8 max-w-sm">Presione para activar la cámara y el escáner de marcadores.</p>
-        <button id="startButton" class="bg-primary hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-xl transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50">
-            <svg class="inline w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.218A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.218c.243.364.597.597.973.597H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            Activar Cámara AR
+        <p id="ui-message" class="text-gray-300 mb-8 max-w-sm">Cargando escena 3D...</p>
+        <button id="startButton" disabled class="bg-gray-500 text-white font-bold py-3 px-8 rounded-full shadow-xl transition duration-300 focus:outline-none focus:ring-4 focus:ring-gray-400 cursor-not-allowed">
+            <svg class="inline w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m1.58-1.58H9m1.29 1.29l1.41-1.41m0 0l-1.41-1.41M12 21h5a2 2 0 002-2v-5m-1.29-1.29l1.41 1.41m0 0l1.41 1.41M20 3a1 1 0 00-1-1h-5.582m-1.58 1.58H15m-1.29-1.29l-1.41 1.41m0 0l1.41 1.41M3 19a1 1 0 001 1h5.582m1.58-1.58H9m-1.29 1.29l-1.41-1.41m0 0l-1.41-1.41"></path></svg>
+            Cargando...
         </button>
     </div>
 
@@ -122,15 +123,22 @@
         const sceneEl = document.getElementById('scene-container');
         const startButton = document.getElementById('startButton');
         const uiOverlay = document.getElementById('ui-overlay');
+        const uiMessage = document.getElementById('ui-message');
         const statusMessage = document.getElementById('status-message');
         
         let mindarComponent = null;
 
-        // Función para mostrar mensajes de estado
-        const updateStatus = (text, colorClass) => {
+        // Función para mostrar mensajes de estado temporal
+        const updateStatus = (text, colorClass, duration = 3000) => {
             statusMessage.textContent = text;
-            statusMessage.className = 'bg-' + colorClass + ' text-white font-bold py-2 px-4 rounded-xl shadow-lg';
+            statusMessage.className = `bg-${colorClass} text-white font-bold py-2 px-4 rounded-xl shadow-lg`;
             statusMessage.style.opacity = '1';
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    statusMessage.style.opacity = '0';
+                }, duration);
+            }
         };
 
         // --- 1. Inicialización y Preparación ---
@@ -147,43 +155,64 @@
             // Obtener la instancia del componente MindAR
             mindarComponent = sceneEl.components['mindar-image'];
             
+            if (!mindarComponent) {
+                updateStatus("ERROR CRÍTICO: MindAR no se cargó correctamente.", 'danger', 0);
+                uiMessage.textContent = "Error de inicialización. Revise la consola.";
+                console.error("MindAR component is null after scene loaded.");
+                return;
+            }
+
+            // Actualizar la UI para indicar que está lista para el usuario
+            uiMessage.textContent = "La escena AR está lista. Presione para activar la cámara.";
+            startButton.textContent = 'Activar Cámara AR';
+            startButton.disabled = false;
+            startButton.classList.remove('bg-gray-500', 'cursor-not-allowed', 'animate-spin');
+            startButton.classList.add('bg-primary', 'hover:bg-blue-700', 'cursor-pointer');
+            
             // --- 2. Función de Inicio Activada por Gesto de Usuario (EL MÉTODO PERFECTO) ---
             const startAR = async () => {
-                if (!mindarComponent) {
-                    updateStatus("ERROR: Componente MindAR no encontrado.", 'red-600');
-                    console.error("MindAR component not found.");
-                    return;
-                }
-                
                 // Ocultar la capa de inicio
                 uiOverlay.style.opacity = '0';
                 setTimeout(() => { uiOverlay.style.display = 'none'; }, 500);
 
                 // Mostrar estado de solicitud
-                updateStatus("Solicitando permisos de cámara...", 'primary');
+                updateStatus("Solicitando permisos de cámara...", 'primary', 5000);
                 
                 try {
                     // LLAMADA CLAVE: Iniciar MindAR manualmente con el gesto de usuario
                     await mindarComponent.start(); 
                     console.log("MindAR iniciado con éxito.");
-                    updateStatus("¡CÁMARA ACTIVA! Busque el marcador.", 'secondary');
+                    updateStatus("¡CÁMARA ACTIVA! Busque el marcador.", 'secondary', 5000);
 
                 } catch (error) {
                     console.error("Error al iniciar MindAR o la cámara:", error);
-                    updateStatus("ERROR: La cámara falló o fue denegada.", 'red-600');
+                    let errorMessage = "ERROR: La cámara falló o fue denegada.";
+                    
+                    // Si el error tiene un nombre o mensaje conocido, lo mostramos
+                    if (error.name === "NotAllowedError" || error.message.includes("denied")) {
+                         errorMessage = "ACCESO DENEGADO: Debe permitir el uso de la cámara en su navegador.";
+                    } else if (error.name === "NotFoundError") {
+                         errorMessage = "NO ENCONTRADA: No se detectó una cámara disponible.";
+                    }
+
+                    updateStatus(errorMessage + " Por favor, recargue y verifique los permisos.", 'danger', 0);
+                    // Mostrar nuevamente el overlay con el error para que el usuario pueda interactuar o recargar
+                    uiOverlay.style.display = 'flex';
+                    uiOverlay.style.opacity = '1';
+                    uiMessage.innerHTML = `<span class="text-danger font-bold">${errorMessage}</span><br>Asegúrese de que su navegador no tiene permisos bloqueados para este sitio.`;
+                    startButton.textContent = 'Recargar para reintentar';
+                    startButton.onclick = () => window.location.reload();
                 }
             };
             
-            // Adjuntar listener al botón solo después de que la escena esté lista
+            // Adjuntar listener al botón
             startButton.addEventListener('click', startAR);
-            startButton.textContent = 'Activar Cámara AR'; // Restaurar texto si cambió
-            startButton.disabled = false;
         });
 
-        // --- 3. Feedback de Estado MindAR ---
+        // --- 3. Feedback de Estado MindAR para errores no capturados en el try/catch ---
         sceneEl.addEventListener('mindar-camera-error', () => {
-             console.error("MindAR Error: La cámara falló o fue denegada.");
-             updateStatus("ERROR: La cámara falló. Active permisos en el navegador.", 'red-600');
+             console.error("MindAR Event Error: La cámara falló o fue denegada (Evento de A-Frame).");
+             updateStatus("ERROR AR: Fallo de la cámara detectado por el evento de A-Frame.", 'danger', 0);
         });
         
     </script>
