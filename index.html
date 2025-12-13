@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Activación de Cámara Pura JS</title>
+    <title>Detección de Marcador AR.js</title>
     
-    <!-- Tailwind CSS CDN para un estilo limpio -->
+    <!-- Tailwind CSS CDN para estilo -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -18,136 +18,113 @@
             }
         }
     </script>
+
+    <!-- 1. A-Frame para la escena 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
     
+    <!-- 2. AR.js (A-Frame component) para la detección de marcadores -->
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #f3f4f6;
-            font-family: 'Inter', sans-serif;
-        }
-        #video-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-        }
-        #camera-feed {
-            /* Hacer que el video ocupe el mayor espacio posible sin distorsión */
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            display: none; /* Inicialmente oculto */
-        }
-        #ui-overlay {
+        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        /* Oculta la escena A-Frame hasta que esté lista */
+        #ar-scene { visibility: hidden; }
+        #message-box {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 10; 
-            background-color: rgba(17, 24, 39, 0.95);
-            padding: 1rem;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            background-color: rgba(17, 24, 39, 0.9); /* Dark overlay */
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
         }
-        .error-box {
-            background-color: #fee2e2;
-            color: #b91c1c;
-            border: 1px solid #fca5a5;
+        .instructions {
+            background-color: #1f2937;
+            color: #d1d5db;
             padding: 1rem;
             border-radius: 0.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-top: 1rem;
+            border: 1px solid #374151;
         }
     </style>
 </head>
 <body>
-    
-    <!-- Contenedor del video donde se mostrará el stream de la cámara -->
-    <div id="video-container">
-        <video id="camera-feed" playsinline autoplay></video>
-    </div>
 
-    <!-- Interfaz de usuario con el botón y mensajes -->
-    <div id="ui-overlay">
-        <h1 class="text-3xl font-bold text-white mb-6 text-center">Prueba de Activación de Cámara</h1>
+    <!-- Contenedor de la UI para el mensaje de inicio -->
+    <div id="message-box" class="text-center">
+        <h1 class="text-2xl font-bold text-white mb-4">Activación de Realidad Aumentada</h1>
+        <p id="status-message" class="text-gray-300 mb-6">Presione 'Iniciar AR' para solicitar la cámara y comenzar la detección.</p>
         
-        <div id="message-area" class="text-center mb-8 max-w-lg text-gray-300">
-            Presiona el botón para solicitar el acceso a tu cámara.
-        </div>
-
-        <button id="startButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer">
-            Solicitar Cámara
+        <!-- El botón para iniciar la secuencia de la cámara/AR -->
+        <button id="startButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300 transform hover:scale-105 cursor-pointer">
+            Iniciar AR
         </button>
+
+        <div class="instructions mt-6">
+            <p class="font-semibold text-lg mb-2 text-yellow-400">Instrucciones:</p>
+            <p class="text-sm">Una vez que la cámara se active, apúntala al marcador 'hiro' (un cuadrado negro con el centro blanco) o a cualquier marcador de patrón.</p>
+            <p class="text-sm mt-1">Busca el marcador 'hiro' en línea para probar la detección.</p>
+        </div>
     </div>
+
+    <!-- Escena A-Frame para Realidad Aumentada -->
+    <a-scene id="ar-scene" embedded arjs='sourceType: webcam; detectionMode: mono; cameraParametersUrl: https://raw.githack.com/AR-js-org/AR.js/master/data/camera_para.dat;'>
+
+        <!-- 3. Definición del marcador AR -->
+        <!-- Este marcador usa el patrón predeterminado 'hiro'. Cuando se detecta, se muestra el contenido dentro. -->
+        <a-marker preset='hiro'>
+            <!-- Contenido que aparece sobre el marcador (Un cubo rojo) -->
+            <a-box position='0 0.5 0' material='color: red; opacity: 0.8;'></a-box>
+            <a-text value="¡Marcador Detectado!" position="0 1.2 0" align="center" width="2" color="#FFFFFF"></a-text>
+        </a-marker>
+
+        <!-- Cámara AR.js predeterminada -->
+        <a-entity camera></a-entity>
+
+    </a-scene>
 
     <script>
-        const video = document.getElementById('camera-feed');
         const startButton = document.getElementById('startButton');
-        const uiOverlay = document.getElementById('ui-overlay');
-        const messageArea = document.getElementById('message-area');
+        const messageBox = document.getElementById('message-box');
+        const statusMessage = document.getElementById('status-message');
+        const arScene = document.getElementById('ar-scene');
 
-        // Función para activar la cámara usando el API nativo de MediaDevices
-        const activateCamera = async () => {
-            messageArea.textContent = "Solicitando permisos de cámara...";
+        // Función que inicia AR.js después del gesto del usuario
+        const initArJs = () => {
+            statusMessage.textContent = "Cargando componentes de AR.js...";
             startButton.disabled = true;
+            startButton.textContent = "Iniciando...";
 
-            try {
-                // La llamada más simple para obtener el stream de video
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment' // Preferir la cámara trasera
-                    } 
-                });
-                
-                // Si tiene éxito:
-                video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    video.play();
-                    // Ocultar la interfaz y mostrar el video
-                    uiOverlay.style.transition = 'opacity 0.5s ease';
-                    uiOverlay.style.opacity = '0';
-                    video.style.display = 'block';
-                    setTimeout(() => { uiOverlay.style.display = 'none'; }, 500);
-                    console.log("Cámara activada con éxito.");
-                };
-                
-            } catch (error) {
-                // Si falla, mostrar el mensaje de error solicitado
-                const errorMessage = "Error: la camara fallo o fue denegada. por favor, recargue y verifique los permisos.";
-                
-                console.error("Error de cámara nativo:", error);
+            // 1. Mostrar la escena A-Frame (la cámara aparecerá automáticamente si AR.js funciona)
+            arScene.style.visibility = 'visible';
 
-                // Mostrar el error en la UI con formato destacado
-                messageArea.innerHTML = `
-                    <div class="error-box mt-4">
-                        <p class="font-bold">¡ALERTA DE ERROR!</p>
-                        <p class="text-sm mt-1">${errorMessage}</p>
-                    </div>
-                `;
-
-                startButton.textContent = 'Recargar para reintentar';
-                startButton.classList.remove('bg-blue-600');
-                startButton.classList.add('bg-red-600');
+            // 2. Esperar a que la cámara se inicialice (AR.js lo maneja internamente)
+            arScene.addEventListener('loaded', function () {
+                statusMessage.textContent = "Cámara activada. Buscando marcador 'hiro'...";
+                
+                // Ocultar la UI con una transición suave después de un breve retraso
+                setTimeout(() => {
+                    messageBox.style.transition = 'opacity 1s ease';
+                    messageBox.style.opacity = '0';
+                    setTimeout(() => { messageBox.style.display = 'none'; }, 1000);
+                }, 2000); // Dar 2 segundos para que el usuario lea el mensaje
+            });
+            
+            // Manejo de errores (Esto solo puede capturar errores de A-Frame/AR.js, no necesariamente de permisos)
+            arScene.addEventListener('arjs-error', function (evt) {
+                console.error("AR.js Error:", evt.detail);
+                statusMessage.innerHTML = `<div class="bg-red-500 text-white p-2 rounded">Error grave de AR.js: ${evt.detail}</div>`;
+                startButton.textContent = 'Error, recargar';
                 startButton.disabled = false;
-                
-                // Permitir al usuario recargar
-                startButton.addEventListener('click', () => window.location.reload(), { once: true });
-            }
+                startButton.classList.remove('bg-green-600');
+                startButton.classList.add('bg-red-600');
+            });
         };
 
-        // Escuchar el gesto de usuario (click) para iniciar
-        startButton.addEventListener('click', activateCamera);
+        // Escuchar el click del usuario para iniciar
+        startButton.addEventListener('click', initArJs);
     </script>
 </body>
 </html>
