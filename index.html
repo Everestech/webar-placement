@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Detección de Marcador AR.js</title>
+    <title>Escaner de Marcador MindAR</title>
     
-    <!-- Tailwind CSS CDN para estilo -->
+    <!-- Tailwind CSS CDN para un estilo limpio -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -19,112 +19,171 @@
         }
     </script>
 
-    <!-- 1. A-Frame para la escena 3D -->
+    <!-- 1. Librerías de MindAR y A-Frame -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
-    
-    <!-- 2. AR.js (A-Frame component) para la detección de marcadores -->
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <!-- MindAR para A-Frame (Image Tracking) -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
-        /* Oculta la escena A-Frame hasta que esté lista */
-        #ar-scene { visibility: hidden; }
-        #message-box {
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Asegura que la escena AR ocupe la totalidad de la pantalla */
+        #ar-scene {
+            width: 100%;
+            height: 100%;
+            display: block;
+            visibility: hidden; /* Oculto hasta que se presione el botón */
+        }
+        
+        /* ESTILO PARA LA CAPA DE INICIO (Debe ser FULL-SCREEN) */
+        #start-overlay {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 100;
-            background-color: rgba(17, 24, 39, 0.9); /* Dark overlay */
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100; 
+            background-color: rgba(17, 24, 39, 0.98); /* Fondo oscuro completo */
+            padding: 1rem;
+            transition: opacity 0.5s ease;
         }
         .instructions {
             background-color: #1f2937;
             color: #d1d5db;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-top: 1rem;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            margin-top: 2rem;
             border: 1px solid #374151;
+            max-width: 90%;
+            text-align: left;
         }
     </style>
 </head>
 <body>
 
-    <!-- Contenedor de la UI para el mensaje de inicio -->
-    <div id="message-box" class="text-center">
-        <h1 class="text-2xl font-bold text-white mb-4">Activación de Realidad Aumentada</h1>
-        <p id="status-message" class="text-gray-300 mb-6">Presione 'Iniciar AR' para solicitar la cámara y comenzar la detección.</p>
+    <!-- 1. CAPA DE INICIO A PANTALLA COMPLETA -->
+    <div id="start-overlay">
+        <h1 class="text-3xl font-extrabold text-white mb-6 text-center">¡Cámara Lista! Active el Escáner AR</h1>
         
-        <!-- El botón para iniciar la secuencia de la cámara/AR -->
-        <button id="startButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300 transform hover:scale-105 cursor-pointer">
-            Iniciar AR
+        <p id="status-message" class="text-lg text-gray-300 mb-8 text-center max-w-lg">
+            Presione el botón para solicitar los permisos de la cámara e iniciar la detección de imágenes.
+        </p>
+
+        <button id="startButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 text-xl rounded-xl shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer">
+            Iniciar Escáner
         </button>
 
-        <div class="instructions mt-6">
-            <p class="font-semibold text-lg mb-2 text-yellow-400">Instrucciones:</p>
-            <p class="text-sm">Una vez que la cámara se active, apúntala al marcador 'hiro' (un cuadrado negro con el centro blanco) o a cualquier marcador de patrón.</p>
-            <p class="text-sm mt-1">Busca el marcador 'hiro' en línea para probar la detección.</p>
+        <div class="instructions">
+            <p class="font-semibold text-xl mb-3 text-yellow-400">Marcador a Usar:</p>
+            <p class="text-sm">Apunte la cámara a la siguiente imagen. Puede buscarla en Google para apuntarle con otro dispositivo.</p>
+            <!-- Imagen de referencia para el usuario (No es el marcador real, solo una guía) -->
+            <img class="mt-4 rounded-lg shadow-md max-w-full h-auto mx-auto" style="max-height: 150px;" 
+                 src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
+                 alt="Imagen del marcador Card-Example" />
         </div>
     </div>
 
-    <!-- Escena A-Frame para Realidad Aumentada -->
-    <a-scene id="ar-scene" embedded arjs='sourceType: webcam; detectionMode: mono; cameraParametersUrl: https://raw.githack.com/AR-js-org/AR.js/master/data/camera_para.dat;'>
+    <!-- 2. ESCENA MINDAR DE A-FRAME (Inicialmente oculta) -->
+    <!-- Utilizamos la configuración de MindAR para Image Tracking y apuntamos al archivo .mind -->
+    <a-scene 
+        id="ar-scene"
+        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; filterMinCF:0.0001; filterBeta: 0.001;"
+        embedded 
+        color-space="srgb" 
+        renderer="colorManagement: true, physicallyCorrectLights: true"
+        vr-mode-ui="enabled: false" 
+        device-orientation-permission-ui="enabled: false">
 
-        <!-- 3. Definición del marcador AR -->
-        <!-- Este marcador usa el patrón predeterminado 'hiro'. Cuando se detecta, se muestra el contenido dentro. -->
-        <a-marker preset='hiro'>
-            <!-- Contenido que aparece sobre el marcador (Un cubo rojo) -->
-            <a-box position='0 0.5 0' material='color: red; opacity: 0.8;'></a-box>
-            <a-text value="¡Marcador Detectado!" position="0 1.2 0" align="center" width="2" color="#FFFFFF"></a-text>
-        </a-marker>
+        <a-assets>
+             <!-- Puedes agregar assets 3D aquí si los necesitas -->
+        </a-assets>
 
-        <!-- Cámara AR.js predeterminada -->
-        <a-entity camera></a-entity>
+        <!-- 3. Contenido AR que aparece sobre la tarjeta detectada (Target Index 0) -->
+        <a-entity mindar-image-target="targetIndex: 0">
+            <!-- Un plano verde para demostrar la detección -->
+            <a-plane 
+                rotation="-90 0 0" 
+                width="1" 
+                height="0.5" 
+                position="0 0 0.2" 
+                material="color: green; opacity: 0.9; side: double">
+            </a-plane>
+            
+            <!-- Un texto flotante encima -->
+            <a-text 
+                value="¡MARCADOR DETECTADO!" 
+                position="0 0.3 0.1" 
+                align="center" 
+                width="1.5" 
+                color="#FFD700" 
+                rotation="-90 0 0">
+            </a-text>
+        </a-entity>
+
+        <!-- Cámara de A-Frame/MindAR -->
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
     </a-scene>
 
     <script>
         const startButton = document.getElementById('startButton');
-        const messageBox = document.getElementById('message-box');
-        const statusMessage = document.getElementById('status-message');
+        const startOverlay = document.getElementById('start-overlay');
         const arScene = document.getElementById('ar-scene');
 
-        // Función que inicia AR.js después del gesto del usuario
-        const initArJs = () => {
-            statusMessage.textContent = "Cargando componentes de AR.js...";
-            startButton.disabled = true;
-            startButton.textContent = "Iniciando...";
-
-            // 1. Mostrar la escena A-Frame (la cámara aparecerá automáticamente si AR.js funciona)
+        // Función que inicia el escáner AR
+        const startScanner = () => {
+            // 1. Mostrar la escena AR
             arScene.style.visibility = 'visible';
-
-            // 2. Esperar a que la cámara se inicialice (AR.js lo maneja internamente)
-            arScene.addEventListener('loaded', function () {
-                statusMessage.textContent = "Cámara activada. Buscando marcador 'hiro'...";
-                
-                // Ocultar la UI con una transición suave después de un breve retraso
-                setTimeout(() => {
-                    messageBox.style.transition = 'opacity 1s ease';
-                    messageBox.style.opacity = '0';
-                    setTimeout(() => { messageBox.style.display = 'none'; }, 1000);
-                }, 2000); // Dar 2 segundos para que el usuario lea el mensaje
-            });
             
-            // Manejo de errores (Esto solo puede capturar errores de A-Frame/AR.js, no necesariamente de permisos)
-            arScene.addEventListener('arjs-error', function (evt) {
-                console.error("AR.js Error:", evt.detail);
-                statusMessage.innerHTML = `<div class="bg-red-500 text-white p-2 rounded">Error grave de AR.js: ${evt.detail}</div>`;
-                startButton.textContent = 'Error, recargar';
-                startButton.disabled = false;
-                startButton.classList.remove('bg-green-600');
-                startButton.classList.add('bg-red-600');
+            // 2. Ocultar la capa de inicio (FULL-SCREEN)
+            startOverlay.style.opacity = '0';
+            setTimeout(() => { 
+                startOverlay.style.display = 'none'; 
+            }, 500); // 500ms para que la transición de opacidad se complete
+
+            // MindAR maneja automáticamente la solicitud de cámara/video
+            // al cambiar la visibilidad de la escena.
+            
+            // Opcional: Escuchar un evento de MindAR para confirmación
+            arScene.addEventListener('mindar-started', () => {
+                console.log("MindAR se ha iniciado y está buscando el marcador.");
+            });
+            arScene.addEventListener('targetFound', (event) => {
+                console.log(`Marcador ${event.detail.targetIndex} encontrado!`);
+            });
+            arScene.addEventListener('targetLost', (event) => {
+                console.log(`Marcador ${event.detail.targetIndex} perdido.`);
+            });
+
+            // Manejo de errores de inicio
+            arScene.addEventListener('ar-error', (err) => {
+                console.error("MindAR Error: ", err);
+                // Mostrar un mensaje de error en pantalla
+                startOverlay.style.opacity = '1';
+                startOverlay.style.display = 'flex';
+                document.getElementById('status-message').innerHTML = `
+                    <div class="bg-red-700 text-white p-4 rounded-lg shadow-xl">
+                        Error al iniciar la cámara. Asegúrese de que su navegador permite el acceso a la cámara. (${err.name})
+                        <br>Por favor, recargue la página.
+                    </div>
+                `;
+                startButton.style.display = 'none';
             });
         };
 
-        // Escuchar el click del usuario para iniciar
-        startButton.addEventListener('click', initArJs);
+        // Escuchar el gesto de usuario (click) para iniciar
+        startButton.addEventListener('click', startScanner);
     </script>
 </body>
 </html>
