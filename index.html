@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Escaner AR con A-Frame</title>
+    <title>Escaner AR con Three.js Manual</title>
     
     <!-- Tailwind CSS CDN para el estilo de la interfaz -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,11 +19,9 @@
         }
     </script>
 
-    <!-- 1. Librerías CRÍTICAS: A-Frame y MindAR A-Frame -->
-    <!-- A-Frame (Maneja el 3D) -->
-    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@1.5.0/dist/aframe-master.min.js"></script>
-    <!-- MindAR A-Frame (Maneja la Realidad Aumentada) -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image-aframe.prod.js"></script>
+    <!-- 1. Librerías CRÍTICAS: Three.js y MindAR Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.1/dist/mindar-image-three.prod.js"></script>
 
     <style>
         body, html {
@@ -36,16 +34,29 @@
             background-color: #000;
         }
 
-        /* Ocultar el canvas de A-Frame hasta que el usuario inicie */
-        #sceneContainer {
+        /* Contenedor principal para la escena AR */
+        #scene-container {
             position: absolute;
             width: 100%;
             height: 100%;
             top: 0;
             left: 0;
-            display: none;
+            display: none; /* Oculto hasta que se inicia el AR */
+        }
+
+        /* Estilos del video y el canvas, ocupando todo el contenedor */
+        #video-element, canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
         
+        /* Ocultar el elemento de video, ya que MindAR proyecta la escena en el canvas */
+        #video-element {
+            display: none;
+        }
+
         /* Estilos de la capa de inicio */
         #start-overlay {
             position: fixed;
@@ -60,8 +71,8 @@
             z-index: 100;
             background-color: rgba(17, 24, 39, 0.98); 
             padding: 1rem;
-            transition: opacity 0.5s ease;
         }
+
         .instructions {
             background-color: #1f2937;
             color: #d1d5db;
@@ -72,10 +83,11 @@
             max-width: 90%;
             text-align: center;
         }
-        /* Estilo para los mensajes de la escena AR */
+        
+        /* Mensaje de estado AR */
         #detection-status {
             position: absolute;
-            top: 0.5rem;
+            top: 1rem;
             left: 50%;
             transform: translateX(-50%);
             z-index: 50;
@@ -91,16 +103,16 @@
 </head>
 <body>
 
-    <!-- 1. CAPA DE INICIO (User Friendly) -->
+    <!-- 1. CAPA DE INICIO (Requiere gesto de usuario) -->
     <div id="start-overlay">
-        <h1 class="text-4xl font-extrabold text-indigo-400 mb-4 text-center">Escaner AR (A-Frame)</h1>
+        <h1 class="text-4xl font-extrabold text-teal-400 mb-4 text-center">Escaner AR con Three.js</h1>
         
         <p id="status-message" class="text-lg text-gray-300 mb-8 text-center max-w-lg">
-            Presiona el botón para activar la cámara e iniciar la detección de marcadores.
+            Presiona el botón para solicitar acceso a la cámara e iniciar el motor AR.
         </p>
 
-        <button id="startButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-12 text-xl rounded-full shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer ring-4 ring-green-400">
-            Activar Escáner AR
+        <button id="startButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 text-xl rounded-full shadow-2xl transition duration-300 transform hover:scale-105 cursor-pointer ring-4 ring-indigo-400">
+            Iniciar Realidad Aumentada
         </button>
 
         <div class="instructions">
@@ -113,112 +125,151 @@
     </div>
     
     <!-- 2. Contenedor de estado de detección (en la escena AR) -->
-    <div id="detection-status">Buscando marcador...</div>
+    <div id="detection-status"></div>
 
-    <!-- 3. CONTENEDOR DE LA ESCENA AR (A-Frame) -->
-    <div id="sceneContainer">
-        <!-- CRÍTICO: Definición de la escena AR con A-Frame y MindAR -->
-        <a-scene 
-            id="arScene"
-            mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false; uiLoading: no; uiError: no"
-            color-space="sRGB" 
-            renderer="colorManagement: true, physicallyCorrectLights: true"
-            vr-mode-ui="enabled: false"
-            device-orientation-permission-ui="enabled: false">
-
-            <!-- CÁMARA: MindAR la gestiona automáticamente -->
-            <a-camera mindar-image-camera=""></a-camera>
-
-            <!-- ANCLAJE: Entidad que se activará al detectar el primer marcador (Index 0) -->
-            <a-entity mindar-image-target="targetIndex: 0" id="target-anchor">
-                
-                <!-- 1. CUBO 3D (Se mantiene el cubo animado) -->
-                <a-box 
-                    color="#6366f1" 
-                    width="0.1" height="0.1" depth="0.1" 
-                    position="0 0.05 0" 
-                    rotation="0 0 0"
-                    animation="property: rotation; to: 0 360 0; loop: true; dur: 3000; easing: linear">
-                </a-box>
-
-                <!-- 2. PLANO VERDE (Superficie plana) -->
-                <!-- A-Frame usa el plano XY por defecto, por lo que no necesita rotación manual -->
-                <a-plane 
-                    color="#4ade80" 
-                    opacity="0.6" 
-                    width="1" height="0.65" 
-                    rotation="-90 0 0" 
-                    position="0 0 0.001">
-                </a-plane>
-
-            </a-entity>
-        </a-scene>
+    <!-- 3. CONTENEDOR DE LA ESCENA AR (Incluirá el Canvas generado por MindAR) -->
+    <div id="scene-container">
+        <!-- Elemento de video explícito para control manual de la cámara -->
+        <video id="video-element" autoplay playsinline></video>
     </div>
 
     <script>
         const startButton = document.getElementById('startButton');
         const startOverlay = document.getElementById('start-overlay');
-        const sceneContainer = document.getElementById('sceneContainer');
-        const arScene = document.getElementById('arScene');
-        const targetAnchor = document.getElementById('target-anchor');
-        const detectionStatus = document.getElementById('detection-status');
+        const sceneContainer = document.getElementById('scene-container');
+        const videoElement = document.getElementById('video-element');
+        const statusDiv = document.getElementById('detection-status');
 
-        const startScanner = async () => {
-            // 1. Mostrar el contenedor de la escena y el estado
-            sceneContainer.style.display = 'block';
-            detectionStatus.style.display = 'block';
+        let mindarThree;
+        let renderer, scene, camera;
+        let mesh; // Objeto 3D (el cubo)
+
+        // Función para manejar errores de la API de MediaDevices
+        const handleError = (error) => {
+            console.error('Error al acceder a la cámara:', error);
+            const message = error.name === 'NotAllowedError' ? 
+                'Permiso de cámara denegado. Por favor, habilítalo en la configuración del navegador.' : 
+                `Error: ${error.message}. Asegúrate de que tu dispositivo tiene cámara.`;
             
-            // 2. Ocultar la capa de inicio
-            startOverlay.style.opacity = '0';
-            setTimeout(() => { 
-                startOverlay.style.display = 'none'; 
-            }, 500); 
+            document.getElementById('status-message').innerHTML = `
+                <div class="bg-red-700 text-white p-4 rounded-lg shadow-xl text-center">
+                    ⚠️ ${message}
+                </div>
+            `;
+            startButton.style.display = 'none';
+        };
 
-            // 3. Iniciar la escena de MindAR/A-Frame
+        const setupThreeScene = (anchor) => {
+            // Configurar la escena 3D (solo la parte que depende del marcador)
+            
+            // 1. Crear el cubo 3D (malla)
+            const geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const material = new THREE.MeshPhongMaterial({ color: 0x6366f1, transparent: true, opacity: 0.9 });
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(0, 0.05, 0); // Un poco levantado sobre el marcador
+
+            // 2. Crear el plano (piso/sombra)
+            const planeGeometry = new THREE.PlaneGeometry(1, 0.65);
+            const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.rotation.x = -Math.PI / 2; // Rotar para que quede plano (horizontal)
+            plane.position.y = 0;
+
+            // 3. Añadir luz (necesaria para MeshPhongMaterial)
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+            scene.add(light);
+
+            // 4. Añadir los objetos al anclaje de MindAR
+            anchor.group.add(mesh);
+            anchor.group.add(plane);
+        };
+
+        const startAR = async () => {
             try {
-                // Obtener el componente MindAR y forzar el inicio
-                const arSystem = arScene.components['mindar-image'];
-                if (arSystem && arSystem.start) {
-                    await arSystem.start();
-                    console.log("MindAR A-Frame iniciado correctamente.");
-                } else {
-                    throw new Error("El componente MindAR A-Frame no se encontró o no tiene método start.");
-                }
-            } catch (err) {
-                console.error("Error al iniciar MindAR A-Frame o la cámara: ", err);
-                // Mostrar error en la interfaz
-                startOverlay.style.opacity = '1';
-                startOverlay.style.display = 'flex';
-                sceneContainer.style.display = 'none';
+                // 1. Ocultar la superposición de inicio
+                startOverlay.style.opacity = '0';
+                setTimeout(() => { startOverlay.style.display = 'none'; }, 500); 
 
-                document.getElementById('status-message').innerHTML = `
-                    <div class="bg-red-700 text-white p-4 rounded-lg shadow-xl text-center">
-                        ⚠️ Error CRÍTICO: No se pudo iniciar el AR. (${err.message})
-                        <br>Asegúrate de tener un navegador compatible y permitir la cámara.
-                    </div>
-                `;
-                startButton.style.display = 'none';
+                // 2. Iniciar la cámara manualmente
+                statusDiv.textContent = 'Solicitando acceso a la cámara...';
+                statusDiv.className = "bg-yellow-600/80";
+                statusDiv.style.display = 'block';
+
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+
+                videoElement.srcObject = stream;
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = resolve;
+                });
+                // El video está cargado y listo para ser usado por MindAR
+
+                // 3. Inicializar MindAR Three.js, pasándole el elemento de video
+                mindarThree = new MindARThree.MindARThree({
+                    container: sceneContainer,
+                    imageTargetSrc: 'https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind',
+                    video: videoElement, // CRÍTICO: Usar el video ya iniciado
+                });
+
+                // Obtener componentes de la escena
+                renderer = mindarThree.renderer;
+                scene = mindarThree.scene;
+                camera = mindarThree.camera;
+
+                // 4. Obtener el anclaje de detección (Target Index 0)
+                const anchor = mindarThree.addAnchor(0);
+
+                // 5. Configurar los objetos 3D y la luz en el anclaje
+                setupThreeScene(anchor);
+                
+                // 6. Configurar eventos de detección
+                anchor.onTargetFound = () => {
+                    statusDiv.textContent = '¡Marcador detectado!';
+                    statusDiv.className = "bg-green-600/80";
+                };
+                anchor.onTargetLost = () => {
+                    statusDiv.textContent = 'Marcador perdido. Buscando...';
+                    statusDiv.className = "bg-yellow-600/80";
+                };
+
+                // 7. Iniciar el motor AR
+                await mindarThree.start();
+                console.log("MindAR Three.js iniciado correctamente.");
+                sceneContainer.style.display = 'block';
+                statusDiv.textContent = 'Buscando marcador...';
+                statusDiv.className = "bg-yellow-600/80";
+                
+                // 8. Iniciar el loop de animación
+                animate();
+
+            } catch (error) {
+                handleError(error);
             }
         };
 
-        // Escuchar el gesto de usuario (click) para iniciar
-        startButton.addEventListener('click', startScanner);
+        // Bucle de animación de Three.js
+        const animate = () => {
+            // Animación del cubo: rotación
+            if (mesh) {
+                mesh.rotation.y += 0.02;
+            }
+            
+            // Renderizado de la escena
+            renderer.render(scene, camera);
+            
+            // El motor AR de MindAR actualiza la pose de la cámara automáticamente
+            // Usamos requestAnimationFrame para el loop
+            requestAnimationFrame(animate);
+        }
 
-        // Lógica de detección de marcador (feedback al usuario)
-        targetAnchor.addEventListener('targetFound', () => {
-            detectionStatus.className = "bg-green-600/80";
-            detectionStatus.textContent = "¡Marcador detectado!";
-        });
+        // Evento de inicio con el gesto del usuario
+        startButton.addEventListener('click', startAR);
 
-        targetAnchor.addEventListener('targetLost', () => {
-            detectionStatus.className = "bg-red-600/80";
-            detectionStatus.textContent = "Marcador perdido. Buscando...";
-        });
-
-        // Configurar el estado inicial
+        // Inicializar estado del div de detección
         document.addEventListener('DOMContentLoaded', () => {
-             detectionStatus.className = "bg-yellow-600/80";
-             detectionStatus.textContent = "Esperando inicio...";
+             statusDiv.textContent = "Listo para iniciar. Click en el botón.";
+             statusDiv.className = "bg-gray-600/80";
         });
     </script>
 </body>
