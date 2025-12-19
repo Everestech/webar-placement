@@ -3,44 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Full Screen</title>
+    <title>AR Full Screen - Fixed Model</title>
     
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        /* Reset básico para evitar cualquier scroll o margen */
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #000;
-        }
+        body { margin: 0; overflow: hidden; background-color: #000; }
 
-        /* Contenedor de la UI inicial */
         #overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             z-index: 999;
-            background: linear-gradient(to bottom, #111827, #000000);
+            background: #111;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             color: white;
-            transition: opacity 0.5s ease;
         }
 
-        #overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
+        #overlay.hidden { display: none; }
 
-        /* Forzar que el video de la cámara ocupe todo el espacio */
-        /* MindAR inyecta un elemento video, le damos prioridad absoluta */
+        /* Forzado de video a pantalla completa sin deformar */
         video {
             width: 100vw !important;
             height: 100vh !important;
@@ -49,58 +35,52 @@
             top: 0 !important;
             left: 0 !important;
         }
-
-        /* Ajustes de A-Frame para eliminar el canvas pequeño */
-        .a-canvas {
-            width: 100% !important;
-            height: 100% !important;
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-        }
     </style>
 </head>
 <body>
 
-    <!-- Capa de bienvenida y activación -->
     <div id="overlay">
         <div class="text-center p-6">
-            <div class="mb-6 bg-white/10 p-4 rounded-xl inline-block">
-                <img src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
-                     class="w-48 rounded shadow-lg" alt="Marcador">
-            </div>
-            <h1 class="text-2xl font-bold mb-4">Experiencia Realidad Aumentada</h1>
-            <p class="text-gray-400 mb-8">Permite el acceso a la cámara para continuar</p>
-            <button id="start-button" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-10 rounded-full transition-transform active:scale-95 shadow-xl">
-                INICIAR CÁMARA
+            <h1 class="text-2xl font-bold mb-6">Escáner AR Listo</h1>
+            <button id="start-button" class="bg-blue-600 text-white font-bold py-4 px-10 rounded-full shadow-xl">
+                ACTIVAR CÁMARA
             </button>
         </div>
     </div>
 
-    <!-- Escena AR -->
-    <!-- 'uiLoading: no' quita la pantalla de carga por defecto de MindAR que a veces causa el fondo negro -->
     <a-scene 
         mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false; uiLoading: no;" 
         embedded
         color-space="sRGB" 
         renderer="colorManagement: true, physicallyCorrectLights: true" 
-        vr-mode-ui="enabled: false" 
-        device-orientation-permission-ui="enabled: false"
-        loading-screen="enabled: false">
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
         
         <a-assets>
+            <!-- Modelo original de ejemplo -->
             <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <!-- ILUMINACIÓN: Fundamental para ver modelos GLTF -->
+        <a-light type="ambient" intensity="1.5"></a-light>
+        <a-light type="directional" position="0 10 5" intensity="1"></a-light>
 
+        <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable"></a-camera>
+
+        <!-- El marcador -->
         <a-entity mindar-image-target="targetIndex: 0">
+            
+            <!-- MODELO GLTF: Ajustado para que sea visible (0.1 suele ser un buen inicio) -->
             <a-gltf-model 
                 src="#avatarModel" 
                 rotation="0 0 0" 
-                position="0 0 0.1" 
-                scale="0.005 0.005 0.005">
+                position="0 0 0" 
+                scale="0.1 0.1 0.1">
             </a-gltf-model>
+
+            <!-- CUBO DE PRUEBA: Si ves esto pero no el modelo, el .gltf tiene problemas -->
+            <a-box position="0.5 0 0" scale="0.2 0.2 0.2" color="red"></a-box>
+            
         </a-entity>
     </a-scene>
 
@@ -110,35 +90,20 @@
         const sceneEl = document.querySelector('a-scene');
 
         startButton.addEventListener('click', () => {
-            // Ocultamos la UI
             overlay.classList.add('hidden');
-
-            // Función para iniciar MindAR
-            const startAR = () => {
-                const arSystem = sceneEl.systems['mindar-image-system'];
-                if (arSystem) {
-                    arSystem.start(); // Inicia la cámara y el rastreo
-                }
-            };
-
-            // Ejecutar inicio
-            startAR();
-        });
-
-        // Manejo de errores de cámara
-        sceneEl.addEventListener("arError", (event) => {
-            console.error("Error en AR:", event);
-            alert("No se pudo acceder a la cámara. Asegúrate de dar permisos.");
-        });
-
-        // Ajuste manual de tamaño al cargar para asegurar Full Screen
-        window.addEventListener('load', () => {
-            const video = document.querySelector('video');
-            if (video) {
-                video.style.width = "100vw";
-                video.style.height = "100vh";
-                video.style.objectFit = "cover";
+            const arSystem = sceneEl.systems['mindar-image-system'];
+            if (arSystem) {
+                arSystem.start();
             }
+        });
+
+        // Eventos para depuración en consola
+        const targetEntity = document.querySelector('[mindar-image-target]');
+        targetEntity.addEventListener("targetFound", event => {
+            console.log("Marcador encontrado");
+        });
+        targetEntity.addEventListener("targetLost", event => {
+            console.log("Marcador perdido");
         });
     </script>
 </body>
