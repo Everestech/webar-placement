@@ -1,91 +1,136 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR MindAR A-Frame</title>
-    <!-- Librerías base -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Inmersiva Total</title>
+    
+    <!-- Librerías de alto rendimiento -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        
-        /* Capa de carga inicial */
+        /* Reset total para eliminar bordes y scroll */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        /* Forzar que el video de la cámara y el canvas de A-Frame sean REALMENTE pantalla completa */
+        video, canvas {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: cover !important; /* Importante para evitar bandas negras */
+            z-index: 0;
+        }
+
+        /* Ajustes de A-Frame para móviles */
+        .a-canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* UI Overlay - Diseño Premium */
         #ui-overlay {
             position: fixed;
             inset: 0;
-            z-index: 999;
-            background: linear-gradient(to bottom, #111827, #000);
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.85);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            color: white;
-            padding: 20px;
-            transition: opacity 0.5s ease;
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
         }
 
-        /* Ocultar botones de A-Frame que ensucian la pantalla */
-        .a-enter-vr { display: none !important; }
-        
-        /* Mensaje de error personalizado si la cámara falla */
-        #error-msg {
-            display: none;
-            background: #ef4444;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            text-align: center;
+        #ui-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
         }
+
+        .marker-preview {
+            width: 220px;
+            height: 220px;
+            border: 3px solid #00f2fe;
+            border-radius: 16px;
+            margin-bottom: 2rem;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Botón estilo Glassmorphism */
+        .btn-glow {
+            background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .btn-glow:active {
+            transform: scale(0.95);
+            box-shadow: 0 0 5px rgba(0, 242, 254, 0.2);
+        }
+
+        /* Ocultar elementos innecesarios de A-Frame */
+        .a-enter-vr, .a-enter-ar { display: none !important; }
     </style>
 </head>
 <body>
 
-    <!-- Interfaz de usuario previa al inicio -->
+    <!-- Capa de Inicio -->
     <div id="ui-overlay">
-        <h1 class="text-3xl font-bold mb-6 text-teal-400">Explorador AR</h1>
-        
-        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-8 text-center max-w-sm">
-            <p class="text-gray-300 mb-4">Escanea el código o la tarjeta para ver el modelo 3D en realidad aumentada.</p>
-            <img src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
-                 class="w-48 h-auto mx-auto border-4 border-white rounded shadow-lg" alt="Marcador">
-            <p class="text-xs text-gray-500 mt-2">Marcador de ejemplo</p>
+        <div class="text-center px-6">
+            <h1 class="text-white text-3xl font-extrabold mb-2 tracking-tight">EXPLORADOR AR</h1>
+            <p class="text-blue-300 text-sm mb-8">Apunta al marcador para ver la magia</p>
+            
+            <div class="marker-preview mx-auto flex items-center justify-center">
+                <img src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" 
+                     class="rounded-lg shadow-inner" alt="Guía del Marcador">
+            </div>
+
+            <button id="btn-start" class="btn-glow text-white font-black py-4 px-12 rounded-2xl text-xl uppercase tracking-widest">
+                ACTIVAR CÁMARA
+            </button>
         </div>
-
-        <button id="btn-start" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-4 px-10 rounded-full text-lg shadow-xl transform transition hover:scale-105 active:scale-95">
-            INICIAR EXPERIENCIA
-        </button>
-
-        <div id="error-msg">Ocurrió un error inesperado al iniciar el AR.</div>
     </div>
 
-    <!-- Escena AR: Se mantiene en el DOM pero MindAR no arranca hasta que lo llamemos -->
+    <!-- Escena AR Fullscreen -->
+    <!-- 'filterMinCF' y 'filterBeta' ayudan a suavizar el temblor del modelo 3D -->
     <a-scene 
         id="main-scene"
-        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false;" 
+        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false; filterMinCF:0.0001; filterBeta: 0.001;" 
+        embedded
         color-space="sRGB" 
-        renderer="colorManagement: true, physicallyCorrectLights: true" 
+        renderer="colorManagement: true, physicallyCorrectLights: true, antialias: true, alpha: true" 
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false">
         
         <a-assets>
-            <!-- El astronauta del ejemplo -->
             <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <!-- Luz ambiental para que el modelo se vea bien en cualquier entorno -->
+        <a-light type="ambient" intensity="1.5"></a-light>
+        <a-light type="directional" position="0 1 1" intensity="1"></a-light>
 
-        <!-- Objetivo del marcador -->
+        <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;"></a-camera>
+
+        <!-- Objetivo -->
         <a-entity mindar-image-target="targetIndex: 0">
-            <!-- Modelo 3D del astronauta -->
             <a-gltf-model 
                 src="#avatarModel" 
                 rotation="0 0 0" 
-                position="0 0 0.1" 
+                position="0 0 0.2" 
                 scale="0.005 0.005 0.005"
-                animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
+                animation="property: rotation; to: 0 360 0; dur: 10000; easing: linear; loop: true">
             </a-gltf-model>
         </a-entity>
     </a-scene>
@@ -93,46 +138,42 @@
     <script>
         const btnStart = document.getElementById('btn-start');
         const overlay = document.getElementById('ui-overlay');
-        const errorMsg = document.getElementById('error-msg');
         const scene = document.querySelector('a-scene');
 
         btnStart.addEventListener('click', () => {
-            // Intentar arrancar el sistema AR
-            try {
-                // 1. Ocultar interfaz inicial
-                overlay.style.opacity = '0';
-                setTimeout(() => {
-                    overlay.style.display = 'none';
-                }, 500);
+            // 1. Efecto visual de salida
+            overlay.classList.add('hidden');
+            
+            // 2. Intentar arranque de cámara y AR
+            const startAR = () => {
+                const mindarSystem = scene.systems['mindar-image-system'];
+                if (mindarSystem) {
+                    mindarSystem.start(); 
+                    console.log("Sistema MindAR iniciado en modo Fullscreen.");
+                } else {
+                    // Reintento si el sistema tarda en cargar
+                    setTimeout(startAR, 200);
+                }
+            };
 
-                // 2. Acceder al componente MindAR de la escena y llamar a start
-                // Usamos un pequeño timeout para asegurar que el DOM esté listo tras la interacción
-                setTimeout(() => {
-                    const mindarSystem = scene.systems['mindar-image-system'];
-                    if (mindarSystem) {
-                        mindarSystem.start(); 
-                    } else {
-                        // Fallback por si el sistema se registra diferente en esta versión
-                        scene.components['mindar-image'].start();
-                    }
-                }, 100);
-
-            } catch (e) {
-                console.error("Error al iniciar AR:", e);
-                overlay.style.opacity = '1';
-                overlay.style.display = 'flex';
-                errorMsg.style.display = 'block';
-                btnStart.innerText = "Reintentar";
-            }
+            // Ejecutar con un pequeño delay para que la transición CSS sea fluida
+            setTimeout(startAR, 300);
         });
 
-        // Manejador de errores global para eventos de la cámara de MindAR
-        scene.addEventListener('arError', (event) => {
-            console.log("Evento de error AR detectado");
-            overlay.style.opacity = '1';
-            overlay.style.display = 'flex';
-            errorMsg.style.display = 'block';
-            errorMsg.innerText = "Error: No se pudo acceder a la cámara.";
+        // Eventos de estado para depuración o feedback visual
+        scene.addEventListener("targetFound", event => {
+            console.log("Marcador detectado");
+        });
+
+        scene.addEventListener("targetLost", event => {
+            console.log("Marcador perdido");
+        });
+
+        // Forzar redimensionamiento en caso de cambio de orientación
+        window.addEventListener('resize', () => {
+            if (scene.renderer) {
+                scene.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         });
     </script>
 </body>
