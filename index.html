@@ -3,30 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Full Screen - Fixed Model</title>
+    <title>AR Restaurado</title>
     
+    <!-- Librerías base que funcionaron -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
+        body { margin: 0; overflow: hidden; }
 
-        #overlay {
+        /* Estilo del botón original que funcionaba */
+        #example-start-button {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 999;
-            background: #111;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            padding: 15px 30px;
+            background: #2563eb;
             color: white;
+            border: none;
+            border-radius: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: sans-serif;
         }
 
-        #overlay.hidden { display: none; }
-
-        /* Forzado de video a pantalla completa sin deformar */
+        /* Forzado de video a pantalla completa sin márgenes */
         video {
             width: 100vw !important;
             height: 100vh !important;
@@ -35,21 +38,25 @@
             top: 0 !important;
             left: 0 !important;
         }
+        
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
-    <div id="overlay">
-        <div class="text-center p-6">
-            <h1 class="text-2xl font-bold mb-6">Escáner AR Listo</h1>
-            <button id="start-button" class="bg-blue-600 text-white font-bold py-4 px-10 rounded-full shadow-xl">
-                ACTIVAR CÁMARA
-            </button>
+    <button id="example-start-button">ACTIVAR CÁMARA</button>
+
+    <!-- UI de carga de MindAR (el escáner) -->
+    <div id="example-scanning-overlay" class="hidden">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-family: sans-serif; text-align: center;">
+            <div style="border: 2px solid white; width: 200px; height: 200px; margin-bottom: 10px;"></div>
+            <p>Enfoca el marcador</p>
         </div>
     </div>
 
+    <!-- Escena configurada como en la versión que sí mostraba el 3D -->
     <a-scene 
-        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false; uiLoading: no;" 
+        mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false; uiLoading: no; uiScanning: #example-scanning-overlay;" 
         embedded
         color-space="sRGB" 
         renderer="colorManagement: true, physicallyCorrectLights: true" 
@@ -57,53 +64,47 @@
         device-orientation-permission-ui="enabled: false">
         
         <a-assets>
-            <!-- Modelo original de ejemplo -->
             <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
         </a-assets>
 
-        <!-- ILUMINACIÓN: Fundamental para ver modelos GLTF -->
-        <a-light type="ambient" intensity="1.5"></a-light>
-        <a-light type="directional" position="0 10 5" intensity="1"></a-light>
+        <!-- Cámara vinculada a MindAR -->
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable"></a-camera>
-
-        <!-- El marcador -->
+        <!-- El target con el modelo que ya habías logrado ver -->
         <a-entity mindar-image-target="targetIndex: 0">
-            
-            <!-- MODELO GLTF: Ajustado para que sea visible (0.1 suele ser un buen inicio) -->
             <a-gltf-model 
                 src="#avatarModel" 
                 rotation="0 0 0" 
                 position="0 0 0" 
-                scale="0.1 0.1 0.1">
+                scale="0.005 0.005 0.005">
             </a-gltf-model>
-
-            <!-- CUBO DE PRUEBA: Si ves esto pero no el modelo, el .gltf tiene problemas -->
-            <a-box position="0.5 0 0" scale="0.2 0.2 0.2" color="red"></a-box>
-            
         </a-entity>
     </a-scene>
 
     <script>
-        const startButton = document.getElementById('start-button');
-        const overlay = document.getElementById('overlay');
+        const startButton = document.querySelector("#example-start-button");
         const sceneEl = document.querySelector('a-scene');
 
         startButton.addEventListener('click', () => {
-            overlay.classList.add('hidden');
+            // Iniciamos el sistema MindAR
             const arSystem = sceneEl.systems['mindar-image-system'];
-            if (arSystem) {
-                arSystem.start();
-            }
+            arSystem.start(); 
+            
+            // Ocultamos el botón
+            startButton.classList.add('hidden');
+            
+            // Mostramos el overlay de escaneo
+            document.querySelector("#example-scanning-overlay").classList.remove('hidden');
         });
 
-        // Eventos para depuración en consola
+        // Cuando se encuentra el marcador, ocultamos el cuadro de escaneo
         const targetEntity = document.querySelector('[mindar-image-target]');
-        targetEntity.addEventListener("targetFound", event => {
-            console.log("Marcador encontrado");
+        targetEntity.addEventListener("targetFound", () => {
+            document.querySelector("#example-scanning-overlay").classList.add('hidden');
         });
-        targetEntity.addEventListener("targetLost", event => {
-            console.log("Marcador perdido");
+
+        targetEntity.addEventListener("targetLost", () => {
+            document.querySelector("#example-scanning-overlay").classList.remove('hidden');
         });
     </script>
 </body>
